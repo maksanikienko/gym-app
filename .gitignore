@@ -1,0 +1,8 @@
+# Private program content — never commit
+data/private/
+*.pdf
+/backend/.env
+*.md
+/backend/*.md
+/frontend/*.md
+/tmp

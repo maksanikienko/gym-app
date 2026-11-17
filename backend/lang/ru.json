@@ -1,0 +1,7 @@
+{
+    "Finish or annul the previous workouts first.": "Сначала заверши или аннулируй предыдущие тренировки.",
+    "All workouts are already closed.": "Все тренировки цикла уже закрыты.",
+    "Unknown exercise.": "Неизвестное упражнение.",
+    "Days that already have workouts cannot be removed.": "Нельзя удалить дни, по которым уже есть тренировки.",
+    "Invalid day_exercise_id": "Упражнение не относится к этой тренировке."
+}
