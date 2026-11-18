@@ -5,6 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { CalendarDays, ChevronRight, FolderPlus, Plus, Upload } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import PageHeader from '@/components/PageHeader.vue'
 import { api, firstError } from '@/lib/api'
 import { useLocalized } from '@/composables/useLocalized'
 import type { ProgramSummary } from '@/types'
@@ -48,52 +53,55 @@ async function onFile(e: Event) {
 
 <template>
   <div>
-    <h1 class="mb-4 text-2xl font-bold tracking-tight">{{ $t('programs.title') }}</h1>
-
-    <div class="relative mb-4 grid grid-cols-2 rounded-xl bg-muted p-1">
-      <span class="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-out"
-        :class="tab === 'mine' ? 'translate-x-full' : ''" />
-      <button v-for="k in (['ready', 'mine'] as const)" :key="k" type="button"
-        class="relative z-10 py-2 text-sm font-medium transition-colors"
-        :class="tab === k ? 'text-foreground' : 'text-muted-foreground'" @click="tab = k">
-        {{ k === 'ready' ? $t('programs.ready') : $t('programs.mineTab') }}
-      </button>
-    </div>
-
-    <div v-if="tab === 'mine'" class="mb-3">
-      <Button class="w-full" @click="router.push('/builder')"><Plus /> {{ $t('programs.create') }}</Button>
-    </div>
-    <div v-else class="mb-3 flex justify-end">
-      <Button variant="outline" size="sm" @click="fileInput?.click()"><Upload /> {{ $t('programs.import') }}</Button>
-    </div>
+    <PageHeader :title="$t('programs.title')">
+      <template #actions>
+        <Button variant="outline" size="icon" class="rounded-full" :aria-label="$t('programs.import')" :title="$t('programs.import')" @click="fileInput?.click()">
+          <Upload />
+        </Button>
+        <Button size="sm" class="h-9 rounded-full px-4" @click="router.push('/builder')"><Plus /> {{ $t('programs.create') }}</Button>
+      </template>
+    </PageHeader>
     <input ref="fileInput" type="file" accept="application/json,.json" class="hidden" @change="onFile" />
 
-    <div v-if="loading" class="space-y-2">
-      <div v-for="i in 3" :key="i" class="h-20 animate-pulse rounded-xl bg-muted" />
+    <Tabs v-model="tab" class="mb-4">
+      <TabsList class="w-full">
+        <TabsTrigger value="ready">{{ $t('programs.ready') }}</TabsTrigger>
+        <TabsTrigger value="mine">{{ $t('programs.mineTab') }}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+
+    <div v-if="loading" class="space-y-2.5">
+      <Skeleton v-for="i in 4" :key="i" class="h-[88px] rounded-2xl" />
     </div>
-    <div v-else-if="!shown.length" class="rise flex flex-col items-center gap-2 rounded-2xl border border-dashed px-6 py-10 text-center">
-      <FolderPlus class="size-10 text-muted-foreground/60" />
-      <p class="font-medium">{{ $t('programs.emptyMine') }}</p>
-      <p class="text-sm text-muted-foreground">{{ $t('programs.emptyMineHint') }}</p>
-    </div>
-    <div v-else :key="tab" class="space-y-2">
-      <RouterLink v-for="(p, i) in shown" :key="p.id" :to="`/programs/${p.id}`"
-        class="rise group flex items-center gap-4 rounded-xl border bg-card p-4 transition-all hover:border-primary/50 active:scale-[0.99]"
-        :style="{ '--i': i }">
-        <div class="grid size-12 shrink-0 place-items-center rounded-xl text-white"
-          :class="p.kind === 'custom' ? 'hero' : 'bg-muted-foreground/70'">
-          <span class="text-lg font-bold">{{ p.days_per_week }}×</span>
-        </div>
-        <div class="min-w-0 flex-1 space-y-1">
-          <span class="block truncate font-semibold">{{ l(p, 'name') }}</span>
-          <p class="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CalendarDays class="size-3.5" />
-            {{ $t('programs.daysPerWeek', { n: p.days_per_week }) }} · {{ $t('programs.weeks', { n: p.weeks_count }) }}
-          </p>
-          <p v-if="p.kind !== 'custom' && l(p, 'description')" class="line-clamp-2 text-xs text-muted-foreground">{{ l(p, 'description') }}</p>
-        </div>
-        <ChevronRight class="size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-      </RouterLink>
+    <Empty v-else-if="!shown.length" class="rise py-12">
+      <EmptyHeader>
+        <EmptyMedia><FolderPlus /></EmptyMedia>
+        <EmptyTitle>{{ $t('programs.emptyMine') }}</EmptyTitle>
+        <EmptyDescription>{{ $t('programs.emptyMineHint') }}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button size="lg" @click="router.push('/builder')"><Plus /> {{ $t('programs.create') }}</Button>
+      </EmptyContent>
+    </Empty>
+    <div v-else :key="tab" class="space-y-2.5">
+      <Item v-for="(p, i) in shown" :key="p.id" as-child variant="card" class="rise" :style="{ '--i': i }">
+        <RouterLink :to="`/programs/${p.id}`">
+          <ItemMedia class="size-12 rounded-xl text-white" :class="p.kind === 'custom' ? 'hero' : 'bg-gradient-to-br from-zinc-500 to-zinc-700 dark:from-zinc-600 dark:to-zinc-800'">
+            <span class="text-lg font-bold tabular-nums">{{ p.days_per_week }}×</span>
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle class="truncate">{{ l(p, 'name') }}</ItemTitle>
+            <ItemDescription class="flex items-center gap-1.5">
+              <CalendarDays class="size-3.5" />
+              {{ $t('programs.daysPerWeek', { n: p.days_per_week }) }} · {{ $t('programs.weeks', { n: p.weeks_count }) }}
+            </ItemDescription>
+            <ItemDescription v-if="p.kind !== 'custom' && l(p, 'description')" class="text-xs">{{ l(p, 'description') }}</ItemDescription>
+          </ItemContent>
+          <ItemActions>
+            <ChevronRight class="size-5 text-muted-foreground/60 transition-transform group-hover/item:translate-x-0.5" />
+          </ItemActions>
+        </RouterLink>
+      </Item>
     </div>
   </div>
 </template>

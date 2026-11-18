@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => {
         name: 'Gym Log',
         short_name: 'Gym Log',
         description: 'Training program tracker',
-        theme_color: '#0a0a0a',
-        background_color: '#0a0a0a',
+        theme_color: '#0f1014',
+        background_color: '#0f1014',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -33,7 +33,13 @@ export default defineConfig(({ mode }) => {
       workbox: {
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/sanctum/],
-        runtimeCaching: [],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'google-fonts', expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+        ],
       },
     }),
   ],

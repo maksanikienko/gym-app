@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAuth } from '@/stores/auth'
 import type { Locale } from '@/types'
 
@@ -9,15 +10,13 @@ const langs: { code: Locale; label: string }[] = [
   { code: 'ru', label: 'RU' },
   { code: 'en', label: 'EN' },
 ]
+function select(v: unknown) {
+  if (v === 'ru' || v === 'en') void auth.setLocale(v)
+}
 </script>
 
 <template>
-  <div class="inline-flex rounded-md border p-0.5">
-    <button v-for="l in langs" :key="l.code" type="button"
-      class="rounded px-3 py-1 text-sm font-medium transition-colors"
-      :class="locale === l.code ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'"
-      @click="auth.setLocale(l.code)">
-      {{ l.label }}
-    </button>
-  </div>
+  <ToggleGroup type="single" :model-value="locale" aria-label="Language" @update:model-value="select">
+    <ToggleGroupItem v-for="l in langs" :key="l.code" :value="l.code" class="px-3">{{ l.label }}</ToggleGroupItem>
+  </ToggleGroup>
 </template>

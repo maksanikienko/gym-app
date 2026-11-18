@@ -3,8 +3,18 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, Lock, Minus, Plus, Save, StickyNote, Trash2 } from '@lucide/vue'
+import { ArrowDown, ArrowUp, ChevronLeft, Copy, Lock, Minus, MoreHorizontal, Plus, Save, StickyNote, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { confirmDialog } from '@/composables/useConfirm'
 import ExercisePicker from '@/components/ExercisePicker.vue'
 import { api, firstError } from '@/lib/api'
 import { useExercises } from '@/stores/exercises'
@@ -106,7 +116,9 @@ onMounted(async () => {
   }
 })
 
-onBeforeRouteLeave(() => (dirty.value && !saving.value ? confirm(t('builder.unsaved')) : true))
+onBeforeRouteLeave(async () => (dirty.value && !saving.value
+  ? confirmDialog({ title: t('builder.unsaved'), confirmText: t('common.confirm'), destructive: true })
+  : true))
 
 // ---------- weeks ----------
 function addWeek() {
@@ -115,14 +127,15 @@ function addWeek() {
   weekIdx.value = form.weeks.length - 1
 }
 const weekUsed = (w: BWeek) => w.days.some((d) => d.used)
-function removeWeek() {
-  if (form.weeks.length < 2 || weekUsed(week.value) || !confirm(t('builder.removeWeekConfirm', { n: weekIdx.value + 1 }))) return
+async function removeWeek() {
+  if (form.weeks.length < 2 || weekUsed(week.value)) return
+  if (!(await confirmDialog({ title: t('builder.removeWeekConfirm', { n: weekIdx.value + 1 }), confirmText: t('common.delete'), destructive: true }))) return
   form.weeks.splice(weekIdx.value, 1)
   weekIdx.value = Math.max(0, weekIdx.value - 1)
 }
 /** Copy the current week into all others, keeping ids by position so history stays attached. */
-function copyToAll() {
-  if (!confirm(t('builder.copyToAllConfirm', { n: weekIdx.value + 1 }))) return
+async function copyToAll() {
+  if (!(await confirmDialog({ title: t('builder.copyToAllConfirm', { n: weekIdx.value + 1 }), confirmText: t('builder.copyToAll') }))) return
   const src = week.value
   form.weeks.forEach((w, wi) => {
     if (wi === weekIdx.value) return
@@ -230,162 +243,163 @@ const restOptions = [0, 1, 2, 3, 4, 5]
 </script>
 
 <template>
-  <div class="pb-24">
-    <header class="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-3 border-b bg-background/90 px-4 py-2 backdrop-blur-lg">
-      <button type="button" class="rounded-full p-1.5 transition-colors active:bg-accent" :aria-label="$t('common.back')" @click="router.back()">
-        <ArrowLeft class="size-5" />
-      </button>
-      <h1 class="flex-1 truncate text-lg font-semibold">{{ isNew ? $t('builder.newTitle') : $t('builder.editTitle') }}</h1>
+  <div class="pb-28">
+    <header class="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 -mt-4 mb-4 flex items-center gap-2 bg-background/80 px-4 py-2 backdrop-blur-xl backdrop-saturate-150">
+      <Button variant="ghost" size="icon" class="-ml-2 rounded-full" :aria-label="$t('common.back')" @click="router.back()">
+        <ChevronLeft class="size-6" />
+      </Button>
+      <h1 class="flex-1 truncate text-[17px] font-semibold">{{ isNew ? $t('builder.newTitle') : $t('builder.editTitle') }}</h1>
       <span v-if="dirty" class="size-2 animate-pulse rounded-full bg-warning" />
     </header>
 
     <div v-if="loading || !week" class="space-y-3">
-      <div v-for="i in 3" :key="i" class="h-32 animate-pulse rounded-xl bg-muted" />
+      <Skeleton class="h-44 rounded-2xl" />
+      <Skeleton class="h-10 rounded-xl" />
+      <Skeleton v-for="i in 2" :key="i" class="h-56 rounded-2xl" />
     </div>
 
     <div v-else class="space-y-5">
       <!-- Name & description -->
-      <section class="rise space-y-3 rounded-2xl border bg-card p-4">
-        <label class="block space-y-1.5">
-          <span class="text-sm font-medium">{{ $t('builder.name') }}</span>
-          <input v-model="form[nameField]" maxlength="150"
-            class="h-11 w-full rounded-lg border bg-background px-3 text-base outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
-        </label>
-        <label class="block space-y-1.5">
-          <span class="text-xs text-muted-foreground">{{ other === 'en' ? $t('builder.nameEn') : $t('builder.nameRu') }}</span>
-          <input v-model="form[otherNameField]" maxlength="150"
-            class="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
-        </label>
-        <label class="block space-y-1.5">
-          <span class="text-sm font-medium">{{ $t('builder.description') }}</span>
-          <textarea v-model="form[descField]" rows="2" maxlength="5000"
-            class="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
-        </label>
-      </section>
+      <Card class="rise gap-4 p-4">
+        <div class="space-y-2">
+          <Label for="b-name">{{ $t('builder.name') }}</Label>
+          <Input id="b-name" v-model="form[nameField]" maxlength="150" class="font-semibold" />
+        </div>
+        <div class="space-y-2">
+          <Label for="b-name-other" class="text-xs font-normal text-muted-foreground">{{ other === 'en' ? $t('builder.nameEn') : $t('builder.nameRu') }}</Label>
+          <Input id="b-name-other" v-model="form[otherNameField]" maxlength="150" class="h-10 text-sm" />
+        </div>
+        <div class="space-y-2">
+          <Label for="b-desc">{{ $t('builder.description') }}</Label>
+          <Textarea id="b-desc" v-model="form[descField]" rows="2" maxlength="5000" class="text-sm" />
+        </div>
+      </Card>
 
       <!-- Weeks -->
       <section class="space-y-3">
-        <div class="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1">
-          <button v-for="(w, i) in form.weeks" :key="w.key" type="button"
-            class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm tabular-nums transition-all duration-200 active:scale-95"
-            :class="i === weekIdx ? 'border-primary bg-primary text-primary-foreground' : ''"
-            @click="weekIdx = i">
-            {{ $t('builder.week') }} {{ i + 1 }}
-          </button>
-          <button type="button" class="flex shrink-0 items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-sm text-primary active:scale-95"
-            @click="addWeek">
-            <Plus class="size-3.5" /> {{ $t('builder.addWeek') }}
-          </button>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <Button v-if="form.weeks.length > 1" variant="outline" size="sm" @click="copyToAll"><Copy /> {{ $t('builder.copyToAll') }}</Button>
-          <Button v-if="form.weeks.length > 1" variant="ghost" size="sm" class="text-destructive" :disabled="weekUsed(week)" @click="removeWeek">
-            <Trash2 /> {{ $t('builder.removeWeek') }}
+        <div class="flex items-center gap-2">
+          <Tabs :model-value="weekIdx" class="min-w-0 flex-1" @update:model-value="(v) => (weekIdx = Number(v))">
+            <TabsList class="no-scrollbar w-full justify-start overflow-x-auto">
+              <TabsTrigger v-for="(w, i) in form.weeks" :key="w.key" :value="i" class="flex-none px-3.5 tabular-nums">
+                {{ $t('builder.week') }} {{ i + 1 }}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="icon" class="size-10 shrink-0 rounded-xl text-primary" :aria-label="$t('builder.addWeek')" @click="addWeek">
+            <Plus />
           </Button>
+          <DropdownMenu v-if="form.weeks.length > 1">
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" size="icon" class="size-10 shrink-0 rounded-xl" :aria-label="$t('common.more')"><MoreHorizontal /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem @select="copyToAll"><Copy /> {{ $t('builder.copyToAll') }}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" :disabled="weekUsed(week)" @select="removeWeek"><Trash2 /> {{ $t('builder.removeWeek') }}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <!-- Days of the selected week -->
         <TransitionGroup name="row" tag="div" class="relative space-y-3">
-          <div v-for="(day, di) in week.days" :key="day.key" class="overflow-hidden rounded-2xl border bg-card shadow-sm">
-            <div class="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
-              <span class="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">{{ di + 1 }}</span>
+          <Card v-for="(day, di) in week.days" :key="day.key" class="gap-0 overflow-hidden py-0">
+            <div class="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-sm font-bold text-primary">{{ di + 1 }}</span>
               <input v-model="day[titleField]" :placeholder="$t('builder.dayTitle')" maxlength="150"
-                class="h-9 min-w-0 flex-1 rounded-md bg-transparent px-2 font-semibold outline-none focus:bg-background focus:ring-2 focus:ring-primary/30" />
-              <Lock v-if="day.used" class="size-4 text-muted-foreground" :aria-label="$t('builder.used')" />
-              <button v-else type="button" class="rounded-md p-2 text-muted-foreground transition-colors hover:text-destructive"
+                class="h-9 min-w-0 flex-1 rounded-lg bg-transparent px-2 font-semibold outline-none transition-shadow placeholder:text-muted-foreground/60 focus:bg-background focus:ring-[3px] focus:ring-ring/40" />
+              <Lock v-if="day.used" class="mx-2 size-4 text-muted-foreground" :aria-label="$t('builder.used')" />
+              <Button v-else variant="ghost" size="icon-sm" class="text-muted-foreground hover:text-destructive"
                 :aria-label="$t('builder.removeDay')" @click="removeDay(di)">
-                <Trash2 class="size-4" />
-              </button>
+                <Trash2 />
+              </Button>
             </div>
 
             <TransitionGroup name="row" tag="div" class="relative divide-y">
-              <div v-for="(r, ri) in day.exercises" :key="r.key" class="space-y-2.5 bg-card p-3">
-                <div class="flex items-start gap-2">
-                  <span class="mt-2 w-4 text-center text-xs tabular-nums text-muted-foreground">{{ ri + 1 }}</span>
-                  <button type="button" class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-left font-medium transition-colors hover:bg-accent"
+              <div v-for="(r, ri) in day.exercises" :key="r.key" class="space-y-3 bg-card p-3">
+                <div class="flex items-center gap-1">
+                  <span class="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">{{ ri + 1 }}</span>
+                  <button type="button" class="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left font-semibold transition-colors hover:bg-accent active:bg-accent"
                     @click="openPicker(day, r)">
                     {{ exName(r.exercise_id) }}
                   </button>
-                  <div class="flex shrink-0">
-                    <button type="button" class="rounded-md p-1.5 text-muted-foreground disabled:opacity-30" :disabled="ri === 0"
-                      :aria-label="$t('builder.moveUp')" @click="move(day, ri, -1)"><ArrowUp class="size-4" /></button>
-                    <button type="button" class="rounded-md p-1.5 text-muted-foreground disabled:opacity-30" :disabled="ri === day.exercises.length - 1"
-                      :aria-label="$t('builder.moveDown')" @click="move(day, ri, 1)"><ArrowDown class="size-4" /></button>
-                    <button type="button" class="rounded-md p-1.5 transition-colors"
-                      :class="r.showNote || r[notesField] ? 'text-primary' : 'text-muted-foreground'"
-                      :aria-label="$t('builder.note')" @click="r.showNote = !r.showNote"><StickyNote class="size-4" /></button>
-                    <button type="button" class="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-                      :aria-label="$t('common.delete')" @click="day.exercises.splice(ri, 1)"><Trash2 class="size-4" /></button>
+                  <div class="flex shrink-0 text-muted-foreground">
+                    <Button variant="ghost" size="icon-sm" :disabled="ri === 0" :aria-label="$t('builder.moveUp')" @click="move(day, ri, -1)"><ArrowUp /></Button>
+                    <Button variant="ghost" size="icon-sm" :disabled="ri === day.exercises.length - 1" :aria-label="$t('builder.moveDown')" @click="move(day, ri, 1)"><ArrowDown /></Button>
+                    <Button variant="ghost" size="icon-sm" :class="r.showNote || r[notesField] ? 'text-primary' : ''"
+                      :aria-label="$t('builder.note')" @click="r.showNote = !r.showNote"><StickyNote /></Button>
+                    <Button variant="ghost" size="icon-sm" class="hover:text-destructive" :aria-label="$t('common.delete')" @click="day.exercises.splice(ri, 1)"><Trash2 /></Button>
                   </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2 pl-6 text-xs">
+                <div class="grid grid-cols-2 gap-x-2 gap-y-2.5 pl-6 text-xs">
                   <div class="space-y-1">
-                    <span class="text-muted-foreground">{{ $t('builder.sets') }}</span>
-                    <div class="flex h-10 items-center rounded-lg border">
-                      <button type="button" class="grid h-full w-9 place-items-center active:bg-accent" @click="r.sets = Math.max(1, r.sets - 1)"><Minus class="size-4" /></button>
+                    <span class="font-medium text-muted-foreground">{{ $t('builder.sets') }}</span>
+                    <div class="flex h-10 items-center overflow-hidden rounded-lg border bg-background dark:bg-input/20">
+                      <button type="button" class="grid h-full w-9 place-items-center text-muted-foreground active:bg-accent" @click="r.sets = Math.max(1, r.sets - 1)"><Minus class="size-4" /></button>
                       <span class="flex-1 text-center text-base font-semibold tabular-nums">{{ r.sets }}</span>
-                      <button type="button" class="grid h-full w-9 place-items-center active:bg-accent" @click="r.sets = Math.min(20, r.sets + 1)"><Plus class="size-4" /></button>
+                      <button type="button" class="grid h-full w-9 place-items-center text-muted-foreground active:bg-accent" @click="r.sets = Math.min(20, r.sets + 1)"><Plus class="size-4" /></button>
                     </div>
                   </div>
                   <div class="space-y-1">
-                    <button type="button" class="text-muted-foreground underline decoration-dotted underline-offset-2" @click="toggleTimed(r)">
+                    <button type="button" class="font-medium text-primary" @click="toggleTimed(r)">
                       {{ r.seconds !== null ? $t('builder.seconds') : $t('builder.reps') }} ⇄
                     </button>
                     <div v-if="r.seconds === null" class="flex items-center gap-1">
-                      <input v-model.number="r.reps" type="number" inputmode="numeric" min="1" max="200"
-                        class="h-10 min-w-0 flex-1 rounded-lg border bg-background text-center text-base tabular-nums outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
+                      <Input v-model.number="r.reps" type="number" inputmode="numeric" min="1" max="200" class="h-10 px-1 text-center tabular-nums" />
                       <span class="text-muted-foreground">–</span>
-                      <input v-model.number="r.reps_max" type="number" inputmode="numeric" min="1" max="200" :placeholder="$t('builder.repsMax')"
-                        class="h-10 min-w-0 flex-1 rounded-lg border bg-background text-center text-base tabular-nums outline-none placeholder:text-xs focus:border-primary focus:ring-2 focus:ring-primary/30" />
+                      <Input v-model.number="r.reps_max" type="number" inputmode="numeric" min="1" max="200" :placeholder="$t('builder.repsMax')"
+                        class="h-10 px-1 text-center tabular-nums placeholder:text-xs" />
                     </div>
-                    <input v-else v-model.number="r.seconds" type="number" inputmode="numeric" min="1" max="3600"
-                      class="h-10 w-full rounded-lg border bg-background text-center text-base tabular-nums outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
+                    <Input v-else v-model.number="r.seconds" type="number" inputmode="numeric" min="1" max="3600" class="h-10 text-center tabular-nums" />
                   </div>
-                  <label class="space-y-1">
-                    <span class="text-muted-foreground">{{ $t('builder.rpe') }}</span>
-                    <select v-model="r.target_rpe" class="h-10 w-full rounded-lg border bg-background text-center text-base">
-                      <option v-for="o in rpeOptions" :key="String(o)" :value="o">{{ o ?? '–' }}</option>
-                    </select>
-                  </label>
                   <div class="space-y-1">
-                    <span class="text-muted-foreground">{{ $t('builder.rest') }}</span>
+                    <span class="font-medium text-muted-foreground">{{ $t('builder.rpe') }}</span>
+                    <NativeSelect v-model="r.target_rpe" select-class="h-10">
+                      <option v-for="o in rpeOptions" :key="String(o)" :value="o">{{ o ?? '–' }}</option>
+                    </NativeSelect>
+                  </div>
+                  <div class="space-y-1">
+                    <span class="font-medium text-muted-foreground">{{ $t('builder.rest') }}</span>
                     <div class="flex items-center gap-1">
-                      <select v-model="r.rest_min" class="h-10 min-w-0 flex-1 rounded-lg border bg-background text-center text-base">
+                      <NativeSelect v-model="r.rest_min" hide-icon select-class="h-10">
                         <option v-for="o in restOptions" :key="o" :value="o">{{ o }}</option>
-                      </select>
+                      </NativeSelect>
                       <span class="text-muted-foreground">–</span>
-                      <select v-model="r.rest_max" class="h-10 min-w-0 flex-1 rounded-lg border bg-background text-center text-base">
+                      <NativeSelect v-model="r.rest_max" hide-icon select-class="h-10">
                         <option v-for="o in restOptions" :key="o" :value="o">{{ o }}</option>
-                      </select>
+                      </NativeSelect>
                     </div>
                   </div>
                 </div>
-                <textarea v-if="r.showNote" v-model="r[notesField]" rows="2" maxlength="1000" :placeholder="$t('builder.note')"
-                  class="ml-6 w-[calc(100%-1.5rem)] rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
+                <Textarea v-if="r.showNote" v-model="r[notesField]" rows="2" maxlength="1000" :placeholder="$t('builder.note')"
+                  class="ml-6 w-[calc(100%-1.5rem)] text-sm" />
               </div>
             </TransitionGroup>
 
             <button type="button"
-              class="flex w-full items-center justify-center gap-1.5 border-t py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+              class="flex w-full items-center justify-center gap-1.5 border-t py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
               @click="openPicker(day)">
               <Plus class="size-4" /> {{ $t('builder.addExercise') }}
             </button>
-          </div>
+          </Card>
         </TransitionGroup>
 
-        <button v-if="week.days.length < 7" type="button"
-          class="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed py-4 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.99]"
+        <Button v-if="week.days.length < 7" variant="ghost" size="lg"
+          class="h-14 w-full rounded-2xl border border-dashed text-muted-foreground hover:border-primary hover:text-primary"
           @click="addDay">
-          <Plus class="size-4" /> {{ $t('builder.addDay') }}
-        </button>
+          <Plus /> {{ $t('builder.addDay') }}
+        </Button>
       </section>
     </div>
 
-    <div class="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
-      <div class="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
-        <span class="flex-1 text-sm text-muted-foreground">{{ $t('builder.weeks', { n: form.weeks.length }) }} · {{ $t('programs.daysPerWeek', { n: Math.max(0, ...form.weeks.map((w) => w.days.length)) }) }}</span>
-        <Button size="lg" class="h-11 px-6 shadow-lg shadow-primary/25" :disabled="saving || loading" @click="save">
+    <!-- Save bar -->
+    <div class="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div class="mx-auto flex max-w-xl items-center gap-3 rounded-3xl border bg-card/90 p-2 pl-4 shadow-2xl shadow-black/15 backdrop-blur-xl dark:shadow-black/50">
+        <div class="flex flex-1 flex-wrap gap-1.5">
+          <Badge variant="secondary">{{ $t('builder.weeks', { n: form.weeks.length }) }}</Badge>
+          <Badge variant="secondary">{{ $t('programs.daysPerWeek', { n: Math.max(0, ...form.weeks.map((w) => w.days.length)) }) }}</Badge>
+        </div>
+        <Button size="lg" class="px-6" :disabled="saving || loading" @click="save">
           <Save /> {{ $t('builder.save') }}
         </Button>
       </div>

@@ -6,6 +6,11 @@ import { Check, CheckCircle2, LineChart, Plus, PlayCircle, Repeat, Trophy, X } f
 import AdviceBox from '@/components/AdviceBox.vue'
 import WarmupPanel from '@/components/WarmupPanel.vue'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { confirmDialog } from '@/composables/useConfirm'
 import { api, firstError } from '@/lib/api'
 import { fmtNum, fmtSets, fmtTarget, youtubeSearch } from '@/lib/format'
 import { useLocalized } from '@/composables/useLocalized'
@@ -150,7 +155,7 @@ function addRow() {
 /** Delete a set: removes it from the log; extra rows disappear, planned rows are cleared. */
 async function removeRow(row: Row) {
   if (row.savedId) {
-    if (!confirm(`${t('workout.deleteSet')}?`)) return
+    if (!(await confirmDialog({ title: `${t('workout.deleteSet')} ${row.set_no}?`, confirmText: t('common.delete'), destructive: true }))) return
     row.busy = true
     try {
       await api(`/sets/${row.savedId}`, 'DELETE')
@@ -185,102 +190,98 @@ const done = computed(() => rows.length > 0 && savedCount.value === rows.length)
 
 <template>
   <Card class="gap-0 overflow-hidden py-0 transition-all duration-300"
-    :class="done ? 'border-success/60 shadow-md shadow-success/10' : ''">
-    <CardHeader class="space-y-1.5 p-4 pb-3">
+    :class="done ? 'border-success/50 shadow-md shadow-success/10' : ''">
+    <CardHeader class="gap-2.5 p-4 pb-3">
       <div class="flex items-start justify-between gap-2">
-        <div class="flex min-w-0 items-start gap-2.5">
-          <span class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums transition-colors duration-300"
-            :class="done ? 'bg-success text-white' : 'bg-primary/10 text-primary'">
+        <div class="flex min-w-0 items-start gap-3">
+          <span class="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl text-sm font-bold tabular-nums transition-colors duration-300"
+            :class="done ? 'bg-success text-white' : 'bg-primary/12 text-primary'">
             <CheckCircle2 v-if="done" class="pop size-4" />
             <template v-else>{{ slot.position }}</template>
           </span>
           <div class="min-w-0">
-            <h3 class="font-semibold leading-tight">{{ l(exercise, 'name') }}</h3>
+            <h3 class="text-[17px] font-semibold leading-tight">{{ l(exercise, 'name') }}</h3>
             <p v-if="locale !== 'en' && exercise.name_ru" class="text-xs text-muted-foreground">{{ exercise.name_en }}</p>
           </div>
         </div>
-        <div class="flex shrink-0 gap-0.5">
-          <a :href="exercise.video_url || youtubeSearch(exercise.name_en)" target="_blank" rel="noopener"
-            class="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground active:bg-accent" :aria-label="$t('workout.video')"><PlayCircle class="size-5" /></a>
-          <RouterLink :to="`/exercises/${exercise.id}`" class="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground active:bg-accent"
-            :aria-label="$t('workout.history')"><LineChart class="size-5" /></RouterLink>
+        <div class="-mt-1 -mr-1.5 flex shrink-0">
+          <Button as-child variant="ghost" size="icon" class="rounded-full text-muted-foreground">
+            <a :href="exercise.video_url || youtubeSearch(exercise.name_en)" target="_blank" rel="noopener" :aria-label="$t('workout.video')"><PlayCircle class="size-5" /></a>
+          </Button>
+          <Button as-child variant="ghost" size="icon" class="rounded-full text-muted-foreground">
+            <RouterLink :to="`/exercises/${exercise.id}`" :aria-label="$t('workout.history')"><LineChart class="size-5" /></RouterLink>
+          </Button>
         </div>
       </div>
-      <div class="flex flex-wrap gap-1.5 text-xs tabular-nums">
-        <span class="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">{{ fmtTarget(slot, $t('common.sec')) }}</span>
-        <span v-if="slot.target_rpe" class="rounded-full bg-muted px-2 py-0.5">RPE {{ slot.target_rpe }}</span>
-        <span v-if="slot.load_pct" class="rounded-full bg-muted px-2 py-0.5">{{ slot.load_pct }}% 1RM</span>
-        <span v-if="slot.warmup_sets" class="rounded-full bg-warning/15 px-2 py-0.5 text-warning">+{{ slot.warmup_sets }} {{ $t('workout.warmupShort') }}</span>
-        <span v-if="restLabel" class="rounded-full bg-muted px-2 py-0.5">{{ $t('workout.rest') }} {{ restLabel }}</span>
-        <span class="ml-auto rounded-full px-2 py-0.5 text-muted-foreground">{{ savedCount }}/{{ rows.length }}</span>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <Badge variant="soft" class="font-semibold">{{ fmtTarget(slot, $t('common.sec')) }}</Badge>
+        <Badge v-if="slot.target_rpe" variant="secondary">RPE {{ slot.target_rpe }}</Badge>
+        <Badge v-if="slot.load_pct" variant="secondary">{{ slot.load_pct }}% 1RM</Badge>
+        <Badge v-if="slot.warmup_sets" variant="warning">+{{ slot.warmup_sets }} {{ $t('workout.warmupShort') }}</Badge>
+        <Badge v-if="restLabel" variant="secondary">{{ $t('workout.rest') }} {{ restLabel }}</Badge>
+        <span class="ml-auto text-xs font-semibold tabular-nums" :class="done ? 'text-success' : 'text-muted-foreground'">{{ savedCount }}/{{ rows.length }}</span>
       </div>
-      <p v-if="note" class="text-xs leading-relaxed text-muted-foreground">{{ note }}</p>
-      <label v-if="options.length > 1" class="flex items-center gap-2 text-sm">
-        <Repeat class="size-4 text-muted-foreground" />
-        <select v-model.number="exerciseId" class="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm">
+      <p v-if="note" class="text-[13px] leading-relaxed text-muted-foreground">{{ note }}</p>
+      <div v-if="options.length > 1" class="flex items-center gap-2">
+        <Repeat class="size-4 shrink-0 text-muted-foreground" />
+        <NativeSelect v-model="exerciseId" select-class="h-9 text-sm">
           <option v-for="(o, i) in options" :key="o.id" :value="o.id">
             {{ i === 0 ? `${$t('workout.original')}: ` : '' }}{{ l(o, 'name') }}
           </option>
-        </select>
-      </label>
+        </NativeSelect>
+      </div>
       <p v-if="subNote" class="text-xs font-medium text-warning">{{ subNote }}</p>
       <AdviceBox v-if="advice" :advice="advice" @apply="applyAdvice" />
       <WarmupPanel v-if="!timed" :work="workWeight" :count="warmupCount" :equipment="exercise.equipment" />
-      <p class="rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">
+      <p class="flex flex-wrap items-baseline gap-x-1.5 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
         {{ $t('workout.previous') }}:
-        <span v-if="prev" class="font-medium tabular-nums text-foreground">{{ fmtSets(prev.sets, $t('common.sec')) }}</span>
+        <span v-if="prev" class="font-semibold tabular-nums text-foreground">{{ fmtSets(prev.sets, $t('common.sec')) }}</span>
         <span v-else>{{ $t('workout.noPrevious') }}</span>
       </p>
     </CardHeader>
 
-    <CardContent class="space-y-2 p-4 pt-1">
-      <div class="grid grid-cols-[1.25rem_1fr_1fr_4rem_2.75rem_1.75rem] items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-        <span>#</span>
-        <span>{{ $t('common.kg') }}</span>
-        <span>{{ timed ? $t('workout.seconds') : $t('workout.reps') }}</span>
-        <span>{{ $t('workout.rpe') }}</span>
+    <CardContent class="space-y-2 border-t bg-muted/20 p-3 pt-2.5">
+      <div class="grid grid-cols-[1.5rem_1fr_1fr_3.75rem_2.75rem_1.75rem] items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span class="text-center">#</span>
+        <span class="text-center">{{ $t('common.kg') }}</span>
+        <span class="text-center">{{ timed ? $t('workout.seconds') : $t('workout.reps') }}</span>
+        <span class="text-center">{{ $t('workout.rpe') }}</span>
         <span />
         <span />
       </div>
-      <TransitionGroup name="row" tag="div" class="relative space-y-2">
+      <TransitionGroup name="row" tag="div" class="relative space-y-1.5">
         <div v-for="row in rows" :key="row.set_no"
-          class="grid grid-cols-[1.25rem_1fr_1fr_4rem_2.75rem_1.75rem] items-center gap-1.5 rounded-lg transition-colors duration-300"
-          :class="row.savedId && !row.dirty ? 'bg-success/5' : ''">
-          <span class="grid place-items-center text-sm font-medium tabular-nums text-muted-foreground">
+          class="grid grid-cols-[1.5rem_1fr_1fr_3.75rem_2.75rem_1.75rem] items-center gap-1.5 rounded-xl p-0.5 transition-colors duration-300"
+          :class="row.savedId && !row.dirty ? 'bg-success/8' : ''">
+          <span class="grid place-items-center text-sm font-semibold tabular-nums text-muted-foreground">
             <Trophy v-if="row.record" class="pop size-4 text-warning" />
             <template v-else>{{ row.set_no }}</template>
           </span>
-          <input v-model="row.weight" inputmode="decimal" :placeholder="hint(row, 'weight')"
-            class="h-11 w-full rounded-lg border bg-background px-1 text-center text-base tabular-nums outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/30"
-            @input="row.dirty = true" />
-          <input v-model="row.amount" inputmode="numeric" :placeholder="hint(row, 'amount')"
-            class="h-11 w-full rounded-lg border bg-background px-1 text-center text-base tabular-nums outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/30"
-            @input="row.dirty = true" />
-          <select v-model="row.rpe"
-            class="h-11 w-full rounded-lg border bg-background px-0.5 text-center text-base outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
-            @change="row.dirty = true">
+          <Input v-model="row.weight" inputmode="decimal" :placeholder="hint(row, 'weight')"
+            class="bg-background px-1 text-center font-semibold tabular-nums dark:bg-input/20" @input="row.dirty = true" />
+          <Input v-model="row.amount" inputmode="numeric" :placeholder="hint(row, 'amount')"
+            class="bg-background px-1 text-center font-semibold tabular-nums dark:bg-input/20" @input="row.dirty = true" />
+          <NativeSelect v-model="row.rpe" hide-icon select-class="bg-background dark:bg-input/20" @change="row.dirty = true">
             <option v-for="o in rpeOptions" :key="o" :value="o">{{ o || '–' }}</option>
-          </select>
+          </NativeSelect>
           <button type="button" :disabled="row.busy" :aria-label="$t('common.save')"
-            class="flex h-11 items-center justify-center rounded-lg border transition-all duration-200 active:scale-90"
+            class="flex h-11 items-center justify-center rounded-lg border transition-all duration-200 active:scale-90 disabled:opacity-60"
             :class="row.savedId && !row.dirty
               ? 'border-success bg-success text-white shadow-sm shadow-success/30'
-              : row.dirty ? 'border-primary text-primary' : 'text-muted-foreground'"
+              : row.dirty ? 'border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/30' : 'bg-background text-muted-foreground dark:bg-input/20'"
             @click="save(row)">
             <Check class="size-5" :class="{ pop: row.savedId && !row.dirty }" />
           </button>
           <button type="button" :disabled="row.busy" :aria-label="$t('workout.deleteSet')"
-            class="flex h-11 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:text-destructive active:scale-90"
+            class="flex h-11 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:text-destructive active:scale-90"
             @click="removeRow(row)">
             <X class="size-4" />
           </button>
         </div>
       </TransitionGroup>
-      <button type="button"
-        class="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.99]"
-        @click="addRow">
-        <Plus class="size-4" /> {{ $t('workout.addSet') }}
-      </button>
+      <Button variant="ghost" class="w-full border border-dashed text-muted-foreground hover:border-primary hover:text-primary" @click="addRow">
+        <Plus /> {{ $t('workout.addSet') }}
+      </Button>
     </CardContent>
   </Card>
 </template>

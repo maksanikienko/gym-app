@@ -2,8 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Plus, Search } from '@lucide/vue'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ChevronRight, Plus, Search } from '@lucide/vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useExercises } from '@/stores/exercises'
 import { useLocalized } from '@/composables/useLocalized'
 import { firstError } from '@/lib/api'
@@ -57,38 +61,43 @@ async function createCustom() {
 </script>
 
 <template>
-  <Dialog v-model:open="open">
-    <DialogContent class="flex max-h-[85dvh] flex-col gap-3 p-4 sm:max-w-lg">
-      <DialogHeader><DialogTitle>{{ $t('builder.pickExercise') }}</DialogTitle></DialogHeader>
-      <label class="flex items-center gap-2 rounded-lg border px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30">
-        <Search class="size-4 text-muted-foreground" />
-        <input v-model="query" :placeholder="$t('builder.search')" class="h-11 w-full bg-transparent text-base outline-none" />
-      </label>
-      <div class="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
-        <button v-for="m in [null, ...muscles]" :key="m ?? 'all'" type="button"
-          class="shrink-0 rounded-full border px-3 py-1 text-xs transition-all active:scale-95"
-          :class="muscle === m ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground'"
+  <Sheet v-model:open="open">
+    <SheetContent class="h-[88dvh] gap-3">
+      <SheetHeader>
+        <SheetTitle>{{ $t('builder.pickExercise') }}</SheetTitle>
+        <SheetDescription class="sr-only">{{ $t('builder.search') }}</SheetDescription>
+      </SheetHeader>
+      <div class="relative px-4">
+        <Search class="pointer-events-none absolute top-1/2 left-7 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input v-model="query" type="search" :placeholder="$t('builder.search')" class="pl-10" />
+      </div>
+      <div class="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-0.5">
+        <Badge v-for="m in [null, ...muscles]" :key="m ?? 'all'" as="button" type="button"
+          :variant="muscle === m ? 'default' : 'outline'"
+          class="h-8 shrink-0 cursor-pointer px-3 text-[13px] transition-all active:scale-95"
+          :class="muscle === m ? '' : 'text-muted-foreground'"
           @click="muscle = m">
           {{ m ? $t(`muscles.${m}`) : $t('builder.all') }}
-        </button>
+        </Badge>
       </div>
-      <div class="-mx-1 min-h-0 flex-1 overflow-y-auto">
-        <button v-for="e in filtered" :key="e.id" type="button"
-          class="flex w-full flex-col items-start rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent active:bg-accent"
-          @click="pick(e)">
-          <span class="flex items-center gap-2 font-medium">
-            {{ l(e, 'name') }}
-            <span v-if="e.custom" class="rounded bg-primary/10 px-1.5 text-[10px] font-semibold uppercase text-primary">{{ $t('programs.mine') }}</span>
-          </span>
-          <span class="text-xs text-muted-foreground">{{ e.muscles.map((m) => $t(`muscles.${m}`)).join(' · ') }}</span>
-        </button>
-        <p v-if="!filtered.length" class="px-3 py-6 text-center text-sm text-muted-foreground">{{ $t('builder.nothingFound') }}</p>
+      <div class="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2">
+        <Item v-for="e in filtered" :key="e.id" as="button" type="button" size="sm" class="w-full rounded-xl text-left" @click="pick(e)">
+          <ItemContent>
+            <ItemTitle>
+              <span class="truncate">{{ l(e, 'name') }}</span>
+              <Badge v-if="e.custom" variant="soft" class="px-1.5 text-[10px] uppercase">{{ $t('programs.mine') }}</Badge>
+            </ItemTitle>
+            <ItemDescription class="text-xs">{{ e.muscles.map((m) => $t(`muscles.${m}`)).join(' · ') }}</ItemDescription>
+          </ItemContent>
+          <ItemActions><ChevronRight class="size-4 text-muted-foreground/50" /></ItemActions>
+        </Item>
+        <p v-if="!filtered.length" class="px-3 py-8 text-center text-sm text-muted-foreground">{{ $t('builder.nothingFound') }}</p>
       </div>
-      <button v-if="query.trim()" type="button" :disabled="busy"
-        class="flex items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary transition-colors hover:border-primary active:scale-[0.99]"
-        @click="createCustom">
-        <Plus class="size-4" /> {{ $t('builder.createExercise', { name: query.trim() }) }}
-      </button>
-    </DialogContent>
-  </Dialog>
+      <div v-if="query.trim()" class="px-4">
+        <Button variant="outline" size="lg" class="w-full border-dashed text-primary" :disabled="busy" @click="createCustom">
+          <Plus /> {{ $t('builder.createExercise', { name: query.trim() }) }}
+        </Button>
+      </div>
+    </SheetContent>
+  </Sheet>
 </template>

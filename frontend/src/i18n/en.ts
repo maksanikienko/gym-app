@@ -4,10 +4,12 @@ const en: typeof ru = {
   app: { name: 'Gym Log' },
   nav: { today: 'Today', programs: 'Programs', history: 'History', settings: 'Settings' },
   common: {
+    confirm: 'Confirm', more: 'More', current: 'Current',
     loading: 'Loading…', save: 'Save', cancel: 'Cancel', delete: 'Delete', back: 'Back',
     error: 'Error', min: 'min', sec: 'sec', kg: 'kg', week: 'Week', 
   },
   auth: {
+    welcome: 'Welcome back', welcomeHint: 'Sign in to continue training', joinTitle: 'Create your account', joinHint: 'Your training log & progress',
     showPassword: 'Show password', hidePassword: 'Hide password', passwordHint: 'At least 8 characters, letters and digits',
     strength: ['Very weak', 'Weak', 'Fair', 'Good', 'Strong'],
     login: 'Sign in', register: 'Sign up', name: 'Name', email: 'Email', password: 'Password',
@@ -61,7 +63,7 @@ const en: typeof ru = {
   exercise: { best: 'Best estimated 1RM', e1rm: 'e1RM', empty: 'No records for this exercise' },
   settings: {
     profile: 'Profile', saveName: 'Save', nameSaved: 'Name updated', changePassword: 'Change password', currentPassword: 'Current password', newPassword: 'New password', repeatPassword: 'Repeat new password', passwordChanged: 'Password changed. Other devices were signed out.',
-    title: 'Settings', language: 'Language', account: 'Account', logout: 'Sign out',
+    title: 'Settings', language: 'Language', theme: 'Theme', themeDark: 'Dark', themeLight: 'Light', themeSystem: 'System', account: 'Account', logout: 'Sign out',
     deleteAccount: 'Delete account', deleteAccountHint: 'All your data will be permanently deleted. Enter your password to confirm.',
     install: 'Install on iPhone', installHint: 'Open the site in Safari → Share → Add to Home Screen.',
   },

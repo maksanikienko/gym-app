@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowUp, Equal, Lightbulb, Wand2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import { fmtNum } from '@/lib/format'
 import type { Advice } from '@/types'
 
@@ -36,13 +37,13 @@ const canApply = computed(() => !!(props.advice.weight_kg || props.advice.reps |
 </script>
 
 <template>
-  <div class="rounded-xl border border-primary/25 bg-primary/5 p-3">
+  <div class="relative overflow-hidden rounded-xl border border-primary/25 bg-gradient-to-br from-primary/10 to-primary/[0.03] p-3">
     <div class="flex items-start gap-2.5">
-      <div class="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+      <div class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
         <Lightbulb class="size-4" />
       </div>
       <div class="min-w-0 flex-1 space-y-0.5">
-        <p class="text-[11px] font-medium uppercase tracking-wider text-primary">{{ $t('advice.title') }}</p>
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-primary">{{ $t('advice.title') }}</p>
         <p v-if="headline" class="flex items-center gap-1.5 text-lg font-bold tabular-nums leading-tight">
           {{ headline }}
           <ArrowUp v-if="trend === 'up'" class="size-4 text-success" />
@@ -51,11 +52,9 @@ const canApply = computed(() => !!(props.advice.weight_kg || props.advice.reps |
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">{{ reason }}</p>
       </div>
-      <button v-if="canApply" type="button"
-        class="flex shrink-0 items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-transform active:scale-95"
-        @click="emit('apply')">
-        <Wand2 class="size-3.5" /> {{ $t('advice.apply') }}
-      </button>
+      <Button v-if="canApply" size="sm" class="shrink-0 rounded-lg" @click="emit('apply')">
+        <Wand2 /> {{ $t('advice.apply') }}
+      </Button>
     </div>
   </div>
 </template>

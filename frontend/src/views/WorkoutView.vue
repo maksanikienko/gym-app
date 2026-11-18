@@ -4,8 +4,13 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWakeLock } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, Ban, CheckCircle2, Flag, Timer, Trash2, X } from '@lucide/vue'
+import { Ban, CheckCircle2, ChevronLeft, Flag, MoreHorizontal, Timer, Trash2, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { confirmDialog } from '@/composables/useConfirm'
 import ExerciseCard from '@/components/ExerciseCard.vue'
 import { api, firstError } from '@/lib/api'
 import { fmtDate } from '@/lib/format'
@@ -68,7 +73,13 @@ function onDeleted(setId: number) {
 async function act(kind: 'finish' | 'skip') {
   if (!session.value) return
   const question = kind === 'finish' ? t('workout.finishConfirm') : t('workout.annulConfirm')
-  if (!confirm(unsaved.value ? `${t('workout.unsaved')}. ${question}` : question)) return
+  const ok = await confirmDialog({
+    title: question,
+    description: unsaved.value ? t('workout.unsaved') : undefined,
+    confirmText: kind === 'finish' ? t('workout.finish') : t('workout.annul'),
+    destructive: kind === 'skip',
+  })
+  if (!ok) return
   busy.value = true
   try {
     const summary = await api<SessionSummary>(`/sessions/${session.value.id}/${kind}`, 'POST')
@@ -89,7 +100,9 @@ async function act(kind: 'finish' | 'skip') {
 }
 
 async function remove() {
-  if (!session.value || !confirm(`${t('workout.deleteConfirm')}\n${t('workout.deleteHint')}`)) return
+  if (!session.value) return
+  const ok = await confirmDialog({ title: t('workout.deleteConfirm'), description: t('workout.deleteHint'), confirmText: t('common.delete'), destructive: true })
+  if (!ok) return
   await api(`/sessions/${session.value.id}`, 'DELETE')
   timer.stop()
   router.replace('/')
@@ -98,36 +111,50 @@ async function remove() {
 
 <template>
   <div>
-    <div v-if="!session" class="space-y-3 pt-14">
-      <div v-for="i in 3" :key="i" class="h-56 animate-pulse rounded-xl bg-muted" />
+    <div v-if="!session" class="space-y-3 pt-2">
+      <Skeleton class="h-12 rounded-xl" />
+      <Skeleton v-for="i in 3" :key="i" class="h-64 rounded-2xl" />
     </div>
 
-    <div v-else class="space-y-4" :class="timer.active.value ? 'pb-28' : ''">
-      <header class="sticky top-0 z-30 -mx-4 border-b bg-background/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
-        <div class="flex items-center gap-3 py-2">
-          <button type="button" class="rounded-full p-1.5 transition-colors active:bg-accent" :aria-label="$t('common.back')" @click="router.push('/')">
-            <ArrowLeft class="size-5" />
-          </button>
+    <div v-else class="space-y-4" :class="timer.active.value ? 'pb-32' : ''">
+      <header class="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 -mt-4 bg-background/80 px-4 pt-2 pb-3 backdrop-blur-xl backdrop-saturate-150">
+        <div class="flex items-center gap-2">
+          <Button variant="ghost" size="icon" class="-ml-2 rounded-full" :aria-label="$t('common.back')" @click="router.push('/')">
+            <ChevronLeft class="size-6" />
+          </Button>
           <div class="min-w-0 flex-1">
-            <p class="truncate font-semibold leading-tight">{{ l(session.day, 'title') }}</p>
-            <p class="text-xs text-muted-foreground">
+            <p class="truncate text-[17px] font-semibold leading-tight">{{ l(session.day, 'title') }}</p>
+            <p class="text-xs text-muted-foreground capitalize">
               <template v-if="session.day">{{ $t('common.week') }} {{ session.day.week_no }} · </template>{{ fmtDate(session.started_at, locale) }}
             </p>
           </div>
-          <span class="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-sm font-medium tabular-nums">
-            <Timer class="size-3.5" />{{ elapsed }}
-          </span>
+          <Badge variant="secondary" class="h-7 gap-1.5 px-2.5 text-sm font-semibold">
+            <Timer class="size-3.5! text-primary" />{{ elapsed }}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon" class="-mr-2 rounded-full" :aria-label="$t('common.more')"><MoreHorizontal /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <template v-if="active">
+                <DropdownMenuItem :disabled="busy" @select="act('skip')"><Ban /> {{ $t('workout.annul') }}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </template>
+              <DropdownMenuItem variant="destructive" :disabled="busy" @select="remove"><Trash2 /> {{ $t('workout.delete') }}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div class="-mx-4 h-1 bg-muted">
-          <div class="h-full bg-primary transition-[width] duration-500 ease-out" :style="{ width: `${pct}%` }" />
+        <div class="mt-2.5 flex items-center gap-3">
+          <Progress :model-value="pct" class="h-1.5" />
+          <span class="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{{ logged }}/{{ planned }}</span>
         </div>
       </header>
 
-      <div v-if="!active" class="rise flex items-center gap-3 rounded-xl border p-3 text-sm"
-        :class="session.status === 'finished' ? 'border-success/40 bg-success/10' : 'bg-muted/50'">
+      <div v-if="!active" class="rise flex items-center gap-3 rounded-2xl border p-3.5 text-sm"
+        :class="session.status === 'finished' ? 'border-success/30 bg-success/10' : 'bg-muted/50'">
         <CheckCircle2 v-if="session.status === 'finished'" class="size-5 text-success" />
         <Ban v-else class="size-5 text-muted-foreground" />
-        <span class="font-medium">{{ $t(`status.${session.status}`) }}</span>
+        <span class="font-semibold">{{ $t(`status.${session.status}`) }}</span>
       </div>
 
       <ExerciseCard v-for="(slot, i) in session.slots" :key="slot.id" class="rise" :style="{ '--i': i }"
@@ -136,34 +163,26 @@ async function remove() {
         @deleted="onDeleted"
         @dirty="(n) => (dirty[slot.id] = n)" />
 
-      <div class="space-y-2 pt-2">
-        <template v-if="active">
-          <Button size="lg" class="h-12 w-full text-base shadow-lg shadow-primary/25" :disabled="busy" @click="act('finish')">
-            <Flag /> {{ $t('workout.finish') }}
-          </Button>
-          <Button size="lg" variant="outline" class="h-11 w-full" :disabled="busy" @click="act('skip')">
-            <Ban /> {{ $t('workout.annul') }}
-          </Button>
-        </template>
-        <Button variant="ghost" class="w-full text-destructive hover:text-destructive" :disabled="busy" @click="remove">
-          <Trash2 /> {{ $t('workout.delete') }}
+      <div v-if="active" class="pt-2">
+        <Button size="xl" class="w-full shadow-lg shadow-primary/25" :disabled="busy" @click="act('finish')">
+          <Flag /> {{ $t('workout.finish') }}
         </Button>
       </div>
 
+      <!-- Rest timer -->
       <Transition name="timer">
-        <div v-if="timer.active.value"
-          class="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgb(0_0_0/0.12)] backdrop-blur-lg">
-          <div class="h-1 bg-muted">
-            <div class="h-full bg-primary transition-[width] duration-300 ease-linear" :style="{ width: `${timer.progress.value}%` }" />
-          </div>
-          <div class="mx-auto flex max-w-xl items-center gap-2 px-4 py-3">
-            <div class="flex-1">
-              <p class="text-[11px] uppercase tracking-wider text-muted-foreground">{{ $t('workout.restTimer') }}</p>
-              <span class="text-4xl font-bold tabular-nums leading-none" :class="{ urgent: timer.remaining.value <= 5 }">{{ timer.label.value }}</span>
+        <div v-if="timer.active.value" class="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div class="mx-auto max-w-xl overflow-hidden rounded-3xl border bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl dark:shadow-black/50">
+            <div class="flex items-center gap-2 px-4 pt-3 pb-2.5">
+              <div class="flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{{ $t('workout.restTimer') }}</p>
+                <span class="text-[40px] leading-none font-bold tracking-tight tabular-nums" :class="{ urgent: timer.remaining.value <= 5 }">{{ timer.label.value }}</span>
+              </div>
+              <Button variant="secondary" size="lg" class="px-3.5 tabular-nums" @click="timer.add(-15)">−15</Button>
+              <Button variant="secondary" size="lg" class="px-3.5 tabular-nums" @click="timer.add(30)">+30</Button>
+              <Button variant="ghost" size="icon-lg" class="rounded-full" :aria-label="$t('workout.skipRest')" @click="timer.stop()"><X /></Button>
             </div>
-            <Button variant="outline" size="lg" class="h-11 px-3 tabular-nums" @click="timer.add(-15)">−15</Button>
-            <Button variant="outline" size="lg" class="h-11 px-3 tabular-nums" @click="timer.add(30)">+30</Button>
-            <Button variant="ghost" size="icon-lg" :aria-label="$t('workout.skipRest')" @click="timer.stop()"><X /></Button>
+            <Progress :model-value="timer.progress.value" class="h-1 rounded-none bg-transparent" indicator-class="rounded-none duration-300 ease-linear" />
           </div>
         </div>
       </Transition>

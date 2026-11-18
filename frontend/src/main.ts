@@ -6,12 +6,9 @@ import { router } from './router'
 import { i18n } from './i18n'
 import { setUnauthorizedHandler } from './lib/api'
 import { useAuth } from './stores/auth'
+import { initTheme } from './lib/theme'
 
-// Follow the system colour scheme.
-const media = window.matchMedia('(prefers-color-scheme: dark)')
-const applyTheme = () => document.documentElement.classList.toggle('dark', media.matches)
-applyTheme()
-media.addEventListener('change', applyTheme)
+initTheme()
 
 const app = createApp(App).use(createPinia()).use(router).use(i18n)
 

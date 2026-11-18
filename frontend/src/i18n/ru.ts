@@ -2,10 +2,12 @@ export default {
   app: { name: 'Gym Log' },
   nav: { today: 'Сегодня', programs: 'Программы', history: 'История', settings: 'Настройки' },
   common: {
+    confirm: 'Подтвердить', more: 'Ещё', current: 'Текущая',
     loading: 'Загрузка…', save: 'Сохранить', cancel: 'Отмена', delete: 'Удалить', back: 'Назад',
     error: 'Ошибка', min: 'мин', sec: 'сек', kg: 'кг', week: 'Неделя', 
   },
   auth: {
+    welcome: 'С возвращением', welcomeHint: 'Войди, чтобы продолжить тренировки', joinTitle: 'Создай аккаунт', joinHint: 'Дневник тренировок и прогресса',
     showPassword: 'Показать пароль', hidePassword: 'Скрыть пароль', passwordHint: 'Минимум 8 символов, буквы и цифры',
     strength: ['Очень слабый', 'Слабый', 'Средний', 'Хороший', 'Надёжный'],
     login: 'Вход', register: 'Регистрация', name: 'Имя', email: 'Email', password: 'Пароль',
@@ -59,7 +61,7 @@ export default {
   exercise: { best: 'Лучший расчётный 1ПМ', e1rm: 'расч. 1ПМ', empty: 'Нет записей по этому упражнению' },
   settings: {
     profile: 'Профиль', saveName: 'Сохранить', nameSaved: 'Имя обновлено', changePassword: 'Смена пароля', currentPassword: 'Текущий пароль', newPassword: 'Новый пароль', repeatPassword: 'Повторите новый пароль', passwordChanged: 'Пароль изменён. На других устройствах выполнен выход.',
-    title: 'Настройки', language: 'Язык', account: 'Аккаунт', logout: 'Выйти',
+    title: 'Настройки', language: 'Язык', theme: 'Тема', themeDark: 'Тёмная', themeLight: 'Светлая', themeSystem: 'Системная', account: 'Аккаунт', logout: 'Выйти',
     deleteAccount: 'Удалить аккаунт', deleteAccountHint: 'Все твои данные будут удалены без возможности восстановления. Введи пароль для подтверждения.',
     install: 'Установка на iPhone', installHint: 'Открой сайт в Safari → «Поделиться» → «На экран Домой».',
   },
