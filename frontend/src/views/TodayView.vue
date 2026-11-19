@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { ChevronDown, ChevronRight, Dumbbell, Play, SkipForward, Trophy } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Dumbbell, Play, SkipForward } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -13,11 +13,12 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import PageHeader from '@/components/PageHeader.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import ProgressRing from '@/components/ProgressRing.vue'
+import CycleSummaryCard from '@/components/CycleSummaryCard.vue'
 import DayStatusIcon from '@/components/DayStatusIcon.vue'
 import { api, firstError, cachedGet } from '@/lib/api'
 import { fmtTarget } from '@/lib/format'
 import { useLocalized } from '@/composables/useLocalized'
-import type { Cycle, CycleDay, Session } from '@/types'
+import type { Cycle, CycleDay, CycleSummary, Session } from '@/types'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -99,10 +100,55 @@ async function skipNext() {
   }
 }
 
-async function finishCycle() {
-  if (!cycle.value || !(await confirmDialog({ title: t('today.finishCycle') + '?', confirmText: t('today.finishCycle') }))) return
-  await api(`/cycles/${cycle.value.id}/finish`, 'POST')
-  cycle.value = null
+/* All days closed → results of the cycle and what to do next. */
+const summary = ref<CycleSummary | null>(null)
+const completed = computed(() => !!cycle.value && !nextDay.value)
+watch(completed, async (done) => {
+  summary.value = null
+  if (!done || !cycle.value) return
+  try {
+    summary.value = (await cachedGet<CycleSummary>(`/cycles/${cycle.value.id}/summary`)).data
+  } catch (e) {
+    toast.error(firstError(e))
+  }
+}, { immediate: true })
+
+async function finishCycle(): Promise<boolean> {
+  if (!cycle.value) return false
+  busy.value = true
+  try {
+    await api(`/cycles/${cycle.value.id}/finish`, 'POST')
+    cycle.value = null
+    return true
+  } catch (e) {
+    toast.error(firstError(e))
+    return false
+  } finally {
+    busy.value = false
+  }
+}
+
+async function confirmFinish() {
+  if (await confirmDialog({ title: t('today.finishCycle') + '?', confirmText: t('today.finishCycle') })) await finishCycle()
+}
+
+/** Same program again from day one; starting a cycle closes the current one on the server. */
+async function repeatProgram() {
+  if (!cycle.value || !(await confirmDialog({ title: t('cycle.repeatConfirm'), confirmText: t('cycle.repeat') }))) return
+  busy.value = true
+  try {
+    await api('/cycles', 'POST', { program_id: cycle.value.program.id })
+    toast.success(t('cycle.repeated'))
+    await load()
+  } catch (e) {
+    toast.error(firstError(e))
+  } finally {
+    busy.value = false
+  }
+}
+
+async function chooseOther() {
+  if (await finishCycle()) router.push({ path: '/programs', query: { tab: 'ready' } })
 }
 </script>
 
@@ -177,15 +223,8 @@ async function finishCycle() {
         </div>
       </Card>
 
-      <Empty v-else class="rise border-solid bg-card py-10" style="--i: 1">
-        <EmptyHeader>
-          <EmptyMedia class="bg-warning/15 text-warning"><Trophy /></EmptyMedia>
-          <EmptyTitle>{{ $t('today.completed') }}</EmptyTitle>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant="outline" size="lg" @click="finishCycle">{{ $t('today.finishCycle') }}</Button>
-        </EmptyContent>
-      </Empty>
+      <CycleSummaryCard v-else :summary="summary" :busy="busy"
+        @repeat="repeatProgram" @other="chooseOther" @finish="confirmFinish" />
 
       <!-- All days -->
       <section class="space-y-2.5">

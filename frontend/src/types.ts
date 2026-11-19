@@ -107,6 +107,20 @@ export interface CycleDay {
   exercises: { name_en: string; name_ru: string | null; sets: number; reps: number | null; reps_max: number | null; reps_text: string | null; seconds: number | null }[]
 }
 
+export interface CycleSummary {
+  cycle_id: number
+  program: ProgramSummary
+  started_at: string
+  finished_at: string | null
+  workouts: { finished: number; skipped: number; total: number }
+  training_minutes: number
+  sets_count: number
+  volume_kg: number
+  /** Best estimated 1RM in the first workout with the exercise vs the best later in the cycle. */
+  progress: { exercise: Exercise; sessions: number; start_e1rm: number; best_e1rm: number; change_pct: number | null }[]
+  skipped_exercises: { exercise: Exercise; times: number }[]
+}
+
 export interface Cycle {
   id: number
   started_at: string

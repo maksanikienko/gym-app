@@ -7,6 +7,7 @@ use App\Models\Program;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Database\Seeders\TemplateProgramSeeder;
 use Tests\TestCase;
 
 class ProgramBuilderTest extends TestCase
@@ -43,7 +44,7 @@ class ProgramBuilderTest extends TestCase
     public function test_ready_made_templates_are_seeded(): void
     {
         $this->actingAs(User::factory()->create());
-        $this->assertCount(3, $this->getJson('/api/programs')->json());
+        $this->assertCount(TemplateProgramSeeder::count(), $this->getJson('/api/programs')->json());
     }
 
     public function test_create_edit_and_keep_history_attached(): void
@@ -127,7 +128,7 @@ class ProgramBuilderTest extends TestCase
         $this->assertSame('custom', $created['kind']);
 
         $kinds = collect($this->getJson('/api/programs')->json())->countBy('kind')->all();
-        $this->assertSame(['library' => 1, 'custom' => 1, 'template' => 3], $kinds);
+        $this->assertSame(['library' => 1, 'custom' => 1, 'template' => TemplateProgramSeeder::count()], $kinds);
 
         // Imported programs are read-only; copying puts an editable version into "Mine"
         $this->putJson("/api/programs/{$imported['id']}", $this->tree())->assertNotFound();

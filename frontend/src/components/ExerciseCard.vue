@@ -8,11 +8,12 @@ import WarmupPanel from '@/components/WarmupPanel.vue'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import NumericInput from '@/components/NumericInput.vue'
 import { NativeSelect } from '@/components/ui/native-select'
 import { confirmDialog } from '@/composables/useConfirm'
 import { api, firstError, isNetworkError } from '@/lib/api'
 import { dequeue, enqueue, flush, onSettled, outbox, pending, setKey, type SetBody } from '@/lib/outbox'
+import { LIMITS, inRange, parseNumber } from '@/lib/numbers'
 import { fmtNum, fmtSets, fmtTarget, youtubeSearch } from '@/lib/format'
 import { useLocalized } from '@/composables/useLocalized'
 import type { Exercise, LastPerformance, SetLog, Slot } from '@/types'
@@ -123,14 +124,20 @@ function hint(row: Row, field: 'weight' | 'amount'): string {
   return ''
 }
 
-const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
+const num = parseNumber
+const amountMax = computed(() => (timed.value ? LIMITS.seconds : LIMITS.reps))
 
 async function save(row: Row) {
   // Empty fields fall back to the placeholder so "same as last time" is one tap.
   const weight = num(row.weight || hint(row, 'weight'))
   const amount = num(row.amount || hint(row, 'amount'))
-  if (amount === null || Number.isNaN(amount) || (weight !== null && Number.isNaN(weight))) {
-    toast.error(t('common.error'))
+  // The fields can't hold anything else, but placeholders / old drafts could — same limits as the API.
+  if (!inRange(amount, 0, amountMax.value, true)) {
+    toast.error(timed.value ? t('validation.seconds', { max: LIMITS.seconds }) : t('validation.reps', { max: LIMITS.reps }))
+    return
+  }
+  if (weight !== null && !inRange(weight, 0, LIMITS.weightKg)) {
+    toast.error(t('validation.weight', { max: LIMITS.weightKg }))
     return
   }
   const firstSave = row.savedId === null && !row.pending
@@ -374,9 +381,9 @@ const loggedSummary = computed(() => rows.filter(isSaved)
             <Trophy v-if="row.record" class="pop size-4 text-warning" />
             <template v-else>{{ row.set_no }}</template>
           </span>
-          <Input v-model="row.weight" :disabled="locked" inputmode="decimal" :placeholder="hint(row, 'weight')"
+          <NumericInput v-model="row.weight" :max="LIMITS.weightKg" :decimals="2" :disabled="locked" :placeholder="hint(row, 'weight')"
             class="bg-background px-1 text-center font-semibold tabular-nums dark:bg-input/20" @input="row.dirty = true" />
-          <Input v-model="row.amount" :disabled="locked" inputmode="numeric" :placeholder="hint(row, 'amount')"
+          <NumericInput v-model="row.amount" :max="amountMax" :disabled="locked" :placeholder="hint(row, 'amount')"
             class="bg-background px-1 text-center font-semibold tabular-nums dark:bg-input/20" @input="row.dirty = true" />
           <NativeSelect v-model="row.rpe" :disabled="locked" hide-icon select-class="bg-background dark:bg-input/20" @change="row.dirty = true">
             <option v-for="o in rpeOptions" :key="o" :value="o">{{ o || '–' }}</option>

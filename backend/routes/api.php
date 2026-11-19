@@ -35,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/cycles/current', [CycleController::class, 'current']);
     Route::post('/cycles', [CycleController::class, 'store']);
+    Route::get('/cycles/{cycle}/summary', [CycleController::class, 'summary']);
     Route::post('/cycles/{cycle}/finish', [CycleController::class, 'finish']);
     Route::post('/cycles/{cycle}/skip-next', [CycleController::class, 'skipNext']);
 

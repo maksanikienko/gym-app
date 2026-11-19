@@ -7,6 +7,7 @@ use App\Models\Cycle;
 use App\Models\Program;
 use App\Models\WorkoutSession;
 use App\Services\CycleProgress;
+use App\Services\CycleSummary;
 use App\Services\WorkoutPresenter;
 use Illuminate\Http\Request;
 
@@ -92,6 +93,15 @@ class CycleController extends Controller
         );
 
         return response()->json(['id' => $session->id]);
+    }
+
+    /** Results of the cycle — shown when all its days are closed, and for finished cycles. */
+    public function summary(Request $request, Cycle $cycle)
+    {
+        abort_unless($cycle->user_id === $request->user()->id, 404);
+        WorkoutSession::closeStale($request->user()->id);
+
+        return response()->json(CycleSummary::build($cycle));
     }
 
     public function finish(Request $request, Cycle $cycle)

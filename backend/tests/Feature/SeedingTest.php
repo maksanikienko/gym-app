@@ -21,6 +21,19 @@ class SeedingTest extends TestCase
         $this->withHeader('Referer', 'http://localhost');
     }
 
+    public function test_every_template_note_has_a_russian_translation(): void
+    {
+        $missing = array_values(array_filter(
+            TemplateProgramSeeder::allNotesEn(),
+            fn ($en) => TemplateProgramSeeder::notesRu($en) === null,
+        ));
+        $this->assertSame([], $missing, 'Add these to database/seeders/data/notes_ru.php');
+
+        // …and the translation reaches the database
+        $slot = \App\Models\DayExercise::whereNotNull('notes_en')->first();
+        $this->assertSame(TemplateProgramSeeder::notesRu($slot->notes_en), $slot->notes_ru);
+    }
+
     public function test_reseeding_updates_templates_in_place_without_duplicates(): void
     {
         $user = User::factory()->create();
@@ -38,11 +51,22 @@ class SeedingTest extends TestCase
         DayExercise::whereKey($slot['id'])->update(['sets' => 9]);
         $countsBefore = [Program::count(), DayExercise::count()];
 
+        // Numbering must stay 1..n after every re-save (it used to alternate with week_no + 1000 / day_no + 100).
+        $assertNumbering = function () {
+            foreach (Program::with('weeks.days')->get() as $program) {
+                $this->assertSame(range(1, $program->weeks->count()), $program->weeks->pluck('week_no')->sort()->values()->all(), $program->slug);
+                foreach ($program->weeks as $week) {
+                    $this->assertSame(range(1, $week->days->count()), $week->days->pluck('day_no')->sort()->values()->all(), $program->slug);
+                }
+            }
+        };
         $this->seed(TemplateProgramSeeder::class);
+        $assertNumbering();
         $this->seed(TemplateProgramSeeder::class);
+        $assertNumbering();
 
         $this->assertSame($countsBefore, [Program::count(), DayExercise::count()]);
-        $this->assertSame(3, Program::whereNull('user_id')->count());
+        $this->assertSame(TemplateProgramSeeder::count(), Program::whereNull('user_id')->count());
         $this->assertSame(3, DayExercise::find($slot['id'])->sets);                // same row, restored
         $this->getJson("/api/sessions/{$session['id']}")->assertOk()->assertJsonCount(1, 'sets');
         $this->assertSame($template->id, $this->getJson('/api/cycles/current')->json('program.id'));

@@ -25,6 +25,13 @@ const en: typeof ru = {
     resume: 'Resume workout', allDays: 'All workouts in this cycle', completed: 'Program completed 🎉',
     progress: '{done} of {total} workouts', finishCycle: 'Finish cycle',
   },
+  cycle: {
+    workouts: 'Workouts', attendance: '{pct}% done', annulled: '{n} annulled', time: 'Time in the gym', hoursUnit: 'h',
+    sets: 'Working sets', volume: 'Total volume', tonnes: 't',
+    progress: 'Strength progress', progressHint: 'Estimated 1RM: first workout → best in the cycle',
+    skippedOften: 'Skipped most often', repeat: 'Repeat the program', chooseOther: 'Choose another program',
+    repeatConfirm: 'Start the program again from day one?', repeated: 'New cycle started — loads continue from where you left off',
+  },
   programs: {
     ready: 'Ready-made', mineTab: 'Mine', create: 'Create', edit: 'Edit', copy: 'Copy to mine', copiedToMine: 'Program copied to “Mine”', emptyMine: 'No programs of your own yet', emptyMineHint: 'Create one in the builder or copy a ready-made program.',
     title: 'Programs', mine: 'Mine', daysPerWeek: '{n} days/wk', weeks: '{n} wk',
@@ -44,6 +51,7 @@ const en: typeof ru = {
     sets: 'Sets', reps: 'Reps', repsMax: 'to', seconds: 'Seconds', rpe: 'RPE', rest: 'Rest, min', note: 'Note',
     save: 'Save', saved: 'Program saved', unsaved: 'You have unsaved changes. Leave anyway?',
     nameRequired: 'Enter a program name', dayEmpty: 'Every day needs at least one exercise (week {w}, day {d})',
+    invalidAt: 'Week {w}, day {d}, {name}',
     used: 'Has workouts — cannot delete', weeks: 'Weeks: {n}', moveUp: 'Up', moveDown: 'Down',
   },
   workout: {
@@ -108,6 +116,8 @@ const en: typeof ru = {
     heaviest: 'Heaviest', best: 'Best 1RM', empty: 'Records appear after your first workouts', sessions: 'workouts: {n}',
   },
   validation: {
+    weight: 'Weight must be 0–{max} kg', reps: 'Reps must be a whole number 0–{max}', seconds: 'Seconds must be a whole number 0–{max}',
+    planReps: 'reps must be 1–{max}', planSeconds: 'seconds must be 1–{max}', repsMax: '"to" must not be less than reps',
     required: 'Required', minChars: 'At least {n} characters', maxChars: 'At most {n} characters',
     email: 'Enter a valid email', nameChars: 'Letters, spaces, dots, hyphens and apostrophes only',
     passwordLetter: 'Add at least one letter', passwordDigit: 'Add at least one digit',

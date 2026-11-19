@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import NumericInput from '@/components/NumericInput.vue'
+import { LIMITS, inRange } from '@/lib/numbers'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -217,6 +219,24 @@ async function save() {
       weekIdx.value = wi
       return toast.error(t('builder.dayEmpty', { w: wi + 1, d: di + 1 }))
     }
+    // Same limits as the API, with a message pointing at the exact exercise.
+    for (const [dj, d] of w.days.entries()) {
+      for (const r of d.exercises) {
+        const where = { w: wi + 1, d: dj + 1, name: exName(r.exercise_id) }
+        const fail = (key: string, params: Record<string, unknown> = {}) => {
+          weekIdx.value = wi
+          toast.error(`${t('builder.invalidAt', where)}: ${t(key, params)}`)
+          return true
+        }
+        if (r.seconds !== null) {
+          if (!inRange(n(r.seconds), 1, LIMITS.seconds, true)) return fail('validation.planSeconds', { max: LIMITS.seconds })
+        } else {
+          if (!inRange(n(r.reps), 1, LIMITS.planReps, true)) return fail('validation.planReps', { max: LIMITS.planReps })
+          const rmax = n(r.reps_max)
+          if (rmax !== null && (!inRange(rmax, 1, LIMITS.planReps, true) || rmax < (r.reps ?? 0))) return fail('validation.repsMax')
+        }
+      }
+    }
   }
   saving.value = true
   try {
@@ -345,12 +365,12 @@ const restOptions = [0, 1, 2, 3, 4, 5]
                       {{ r.seconds !== null ? $t('builder.seconds') : $t('builder.reps') }} ⇄
                     </button>
                     <div v-if="r.seconds === null" class="flex items-center gap-1">
-                      <Input v-model.number="r.reps" type="number" inputmode="numeric" min="1" max="200" class="h-10 px-1 text-center tabular-nums" />
+                      <NumericInput v-model="r.reps" as-number :max="LIMITS.planReps" class="h-10 px-1 text-center tabular-nums" />
                       <span class="text-muted-foreground">–</span>
-                      <Input v-model.number="r.reps_max" type="number" inputmode="numeric" min="1" max="200" :placeholder="$t('builder.repsMax')"
+                      <NumericInput v-model="r.reps_max" as-number :max="LIMITS.planReps" :placeholder="$t('builder.repsMax')"
                         class="h-10 px-1 text-center tabular-nums placeholder:text-xs" />
                     </div>
-                    <Input v-else v-model.number="r.seconds" type="number" inputmode="numeric" min="1" max="3600" class="h-10 text-center tabular-nums" />
+                    <NumericInput v-else v-model="r.seconds" as-number :max="LIMITS.seconds" class="h-10 text-center tabular-nums" />
                   </div>
                   <div class="space-y-1">
                     <span class="font-medium text-muted-foreground">{{ $t('builder.rpe') }}</span>

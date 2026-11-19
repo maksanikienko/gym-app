@@ -73,9 +73,11 @@ class ProgramWriter
                 'source' => $program->source ?? 'user',
             ])->save();
 
-            $existingWeeks = $program->weeks()->with('days.exercises')->get()->keyBy('id');
-            // Shift numbers first so renumbering never collides with unique indexes.
+            // Shift numbers first so renumbering never collides with unique indexes. Load the models only
+            // AFTER the shift: models loaded before it still hold the old number, so setting the same number
+            // back looks "unchanged" to Eloquent, the UPDATE is skipped and the row keeps week_no + 1000.
             ProgramWeek::where('program_id', $program->id)->update(['week_no' => DB::raw('week_no + 1000')]);
+            $existingWeeks = $program->weeks()->with('days.exercises')->get()->keyBy('id');
 
             $keepWeeks = [];
             foreach (array_values($data['weeks']) as $wi => $w) {
@@ -98,8 +100,9 @@ class ProgramWriter
 
     private function syncDays(ProgramWeek $week, array $days): void
     {
-        $existing = $week->exists ? $week->days()->with('exercises')->get()->keyBy('id') : collect();
+        // Same as for weeks: shift first, then load (see save()).
         ProgramDay::where('program_week_id', $week->id)->update(['day_no' => DB::raw('day_no + 100')]);
+        $existing = $week->exists ? $week->days()->with('exercises')->get()->keyBy('id') : collect();
 
         $keep = [];
         foreach (array_values($days) as $di => $d) {

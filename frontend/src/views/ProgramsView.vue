@@ -22,8 +22,13 @@ const tab = computed<'ready' | 'mine'>({
   set: (v) => router.replace({ query: { tab: v } }),
 })
 // Ready-made = shared templates + the user's imported programs; Mine = built or copied by the user.
-const shown = computed(() => programs.value.filter((p) => (tab.value === 'mine') === (p.kind === 'custom')))
 const { l } = useLocalized()
+// Lightest first: fewer training days a week, then shorter programs, then by name.
+const shown = computed(() => programs.value
+  .filter((p) => (tab.value === 'mine') === (p.kind === 'custom'))
+  .sort((a, b) => a.days_per_week - b.days_per_week
+    || a.weeks_count - b.weeks_count
+    || l(a, 'name').localeCompare(l(b, 'name'))))
 const programs = ref<ProgramSummary[]>([])
 const loading = ref(true)
 const fileInput = ref<HTMLInputElement>()
