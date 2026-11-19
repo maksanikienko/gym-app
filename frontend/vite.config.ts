@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        importScripts: ['sw-notify.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/sanctum/],
         runtimeCaching: [

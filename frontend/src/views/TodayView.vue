@@ -14,7 +14,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import ProgressRing from '@/components/ProgressRing.vue'
 import DayStatusIcon from '@/components/DayStatusIcon.vue'
-import { api, firstError } from '@/lib/api'
+import { api, firstError, cachedGet } from '@/lib/api'
 import { fmtTarget } from '@/lib/format'
 import { useLocalized } from '@/composables/useLocalized'
 import type { Cycle, CycleDay, Session } from '@/types'
@@ -28,7 +28,7 @@ const busy = ref(false)
 
 async function load() {
   try {
-    cycle.value = (await api<Cycle | undefined>('/cycles/current')) ?? null
+    cycle.value = (await cachedGet<Cycle | undefined>('/cycles/current')).data ?? null
   } catch (e) {
     toast.error(firstError(e))
   } finally {

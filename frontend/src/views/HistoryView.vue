@@ -89,6 +89,7 @@ onMounted(load)
                   <span class="inline-flex items-center gap-1"><Dumbbell class="size-3" /> {{ s.sets_count }} {{ $t('history.sets') }}</span>
                   <span class="inline-flex items-center gap-1"><Weight class="size-3" /> {{ s.volume_kg }} {{ $t('common.kg') }}</span>
                 </div>
+                <p v-if="s.note" class="mt-1 line-clamp-2 text-xs italic text-muted-foreground">“{{ s.note }}”</p>
               </ItemContent>
               <ItemActions><ChevronRight class="size-5 text-muted-foreground/50" /></ItemActions>
             </RouterLink>

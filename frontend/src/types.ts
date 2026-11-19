@@ -149,6 +149,8 @@ export interface Session {
   started_at: string
   finished_at: string | null
   note: string | null
+  /** Slot ids the user chose to skip in this workout (their logged sets are kept). */
+  skipped_slots: number[]
   day: { id: number; week_no: number; block: string | null; day_no: number; title_en: string; title_ru: string | null } | null
   slots: Slot[]
   sets: SetLog[]
@@ -162,6 +164,7 @@ export interface SessionSummary {
   finished_at: string | null
   duration_min: number | null
   day: { week_no: number; title_en: string; title_ru: string | null } | null
+  note: string | null
   sets_count: number
   volume_kg: number
 }

@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const KEY = 'gym.rest.endsAt'
 let audio: AudioContext | null = null
@@ -21,11 +22,45 @@ function beep() {
   navigator.vibrate?.([200, 100, 200])
 }
 
+const TAG = 'rest-timer'
+const notifySupported = typeof window !== 'undefined' && 'Notification' in window
+
+async function closeRestNotifications() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration()
+    for (const n of (await reg?.getNotifications({ tag: TAG })) ?? []) n.close()
+  } catch { /* ignore */ }
+}
+
 /**
  * Rest timer based on an absolute end time, so it stays correct when
  * iOS suspends the page in the background.
  */
 export function useRestTimer() {
+  const { t } = useI18n()
+  const notifyPermission = ref<NotificationPermission | 'unsupported'>(notifySupported ? Notification.permission : 'unsupported')
+
+  /** Must be called from a tap (iOS requires a user gesture for the permission prompt). */
+  async function enableNotifications() {
+    if (!notifySupported) return 'unsupported' as const
+    notifyPermission.value = await Notification.requestPermission()
+    return notifyPermission.value
+  }
+
+  /** System notification — only useful when the app is in the background; in the foreground the beep is enough. */
+  async function notify() {
+    if (!notifySupported || Notification.permission !== 'granted') return
+    const title = t('workout.restOver')
+    const options = {
+      body: t('workout.restOverBody'), tag: TAG, renotify: true, vibrate: [200, 100, 200], icon: '/pwa-192.png',
+    } as NotificationOptions
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration()
+      if (reg) await reg.showNotification(title, options)
+      else new Notification(title, options)
+    } catch { /* ignore */ }
+  }
+
   const endsAt = ref<number | null>(null)
   const total = ref(0)
   const now = ref(Date.now())
@@ -52,6 +87,7 @@ export function useRestTimer() {
         persist()
         clearInterval(tick)
         beep()
+        if (document.visibilityState === 'hidden') void notify()
       }
     }, 250)
   }
@@ -63,6 +99,7 @@ export function useRestTimer() {
       audio ??= new AudioContext()
       void audio.resume()
     } catch { /* ignore */ }
+    void closeRestNotifications()
     total.value = seconds
     now.value = Date.now()
     endsAt.value = now.value + seconds * 1000
@@ -93,5 +130,5 @@ export function useRestTimer() {
   })
   const progress = computed(() => (total.value ? (remaining.value / total.value) * 100 : 0))
 
-  return { start, add, stop, remaining, active, label, progress }
+  return { start, add, stop, remaining, active, label, progress, notifyPermission, enableNotifications }
 }

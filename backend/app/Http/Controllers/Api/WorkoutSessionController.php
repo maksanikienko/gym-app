@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\DayExercise;
 use App\Models\WorkoutSession;
 use App\Services\CycleProgress;
 use App\Services\WorkoutPresenter;
@@ -12,6 +13,7 @@ class WorkoutSessionController extends Controller
 {
     public function index(Request $request)
     {
+        WorkoutSession::closeStale($request->user()->id);
         $page = $request->user()->workoutSessions()
             ->with(['day.week', 'sets'])
             ->latest('started_at')->latest('id')
@@ -32,6 +34,7 @@ class WorkoutSessionController extends Controller
     {
         $data = $request->validate(['program_day_id' => ['required', 'integer']]);
         $user = $request->user();
+        WorkoutSession::closeStale($user->id);
         $cycle = $user->activeCycle()->with('program')->firstOrFail();
         $progress = new CycleProgress($cycle);
 
@@ -62,16 +65,31 @@ class WorkoutSessionController extends Controller
     public function show(Request $request, WorkoutSession $session)
     {
         $this->authorizeSession($request, $session);
+        WorkoutSession::closeStale($request->user()->id);
 
-        return response()->json(WorkoutPresenter::session($session, $request->user()));
+        return response()->json(WorkoutPresenter::session($session->refresh(), $request->user()));
     }
 
     public function update(Request $request, WorkoutSession $session)
     {
         $this->authorizeSession($request, $session);
-        $session->update($request->validate(['note' => ['nullable', 'string', 'max:2000']]));
+        $data = $request->validate([
+            'note' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            // Full list of skipped exercises (slot ids of this workout's day); logged sets are kept.
+            'skipped_slots' => ['sometimes', 'array', 'max:100'],
+            'skipped_slots.*' => ['integer'],
+        ]);
 
-        return response()->noContent();
+        if (array_key_exists('skipped_slots', $data)) {
+            $ids = array_values(array_unique(array_map('intval', $data['skipped_slots'])));
+            $valid = DayExercise::whereIn('id', $ids)->where('program_day_id', $session->program_day_id)->count();
+            abort_unless($valid === count($ids), 422, 'Invalid skipped_slots');
+            sort($ids);
+            $data['skipped_slots'] = $ids;
+        }
+        $session->update($data);
+
+        return response()->json(['note' => $session->note, 'skipped_slots' => $session->skipped_slots ?? []]);
     }
 
     public function finish(Request $request, WorkoutSession $session)

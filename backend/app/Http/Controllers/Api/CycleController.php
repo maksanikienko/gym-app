@@ -15,6 +15,7 @@ class CycleController extends Controller
     /** Active cycle with progress, per-day status and the next day to train. */
     public function current(Request $request)
     {
+        WorkoutSession::closeStale($request->user()->id);
         $cycle = $request->user()->activeCycle()->with('program')->first();
         if (! $cycle) {
             return response()->noContent(); // no active cycle

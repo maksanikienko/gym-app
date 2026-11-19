@@ -160,6 +160,69 @@ class WorkoutFlowTest extends TestCase
         $this->assertCount(0, $this->getJson("/api/sessions/{$session['id']}")->json('sets'));
     }
 
+    public function test_exercise_can_be_skipped_and_restored(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $programId = $this->postJson('/api/programs/import', $this->pack())->json('0.id');
+        $this->postJson('/api/cycles', ['program_id' => $programId]);
+        $day = $this->getJson('/api/cycles/current')->json('next_day_id');
+        $session = $this->postJson('/api/sessions', ['program_day_id' => $day])->json();
+        [$squat, $special] = $session['slots'];
+        $this->assertSame([], $session['skipped_slots']);
+
+        // A set logged before skipping stays in the log
+        $this->postJson("/api/sessions/{$session['id']}/sets", [
+            'day_exercise_id' => $special['id'], 'exercise_id' => $special['exercise']['id'], 'set_no' => 1, 'reps' => 10,
+        ])->assertCreated();
+
+        $this->patchJson("/api/sessions/{$session['id']}", ['skipped_slots' => [$special['id'], $special['id']]])
+            ->assertOk()->assertJsonPath('skipped_slots', [$special['id']]);
+        $shown = $this->getJson("/api/sessions/{$session['id']}")->json();
+        $this->assertSame([$special['id']], $shown['skipped_slots']);
+        $this->assertCount(1, $shown['sets']);
+
+        // Updating the note alone doesn't touch skipped exercises
+        $this->patchJson("/api/sessions/{$session['id']}", ['note' => 'tired'])->assertJsonPath('skipped_slots', [$special['id']]);
+        $this->getJson('/api/sessions')->assertJsonPath('data.0.note', 'tired');
+
+        // Slot from another day is rejected
+        $otherDay = Program::find($programId)->days()->where('day_no', 2)->first()->exercises()->value('id');
+        $this->patchJson("/api/sessions/{$session['id']}", ['skipped_slots' => [$otherDay]])->assertStatus(422);
+
+        $this->patchJson("/api/sessions/{$session['id']}", ['skipped_slots' => []])->assertJsonPath('skipped_slots', []);
+    }
+
+    public function test_abandoned_workout_closes_automatically(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $programId = $this->postJson('/api/programs/import', $this->pack())->json('0.id');
+        $this->postJson('/api/cycles', ['program_id' => $programId]);
+        [$dayA, $dayB] = array_column($this->getJson('/api/cycles/current')->json('days'), 'id');
+
+        $a = $this->postJson('/api/sessions', ['program_day_id' => $dayA])->json();
+        $slot = $a['slots'][0];
+        $this->travel(2)->hours();
+        $this->postJson("/api/sessions/{$a['id']}/sets", [
+            'day_exercise_id' => $slot['id'], 'exercise_id' => $slot['exercise']['id'], 'set_no' => 1, 'weight_kg' => 100, 'reps' => 5,
+        ])->assertCreated();
+        $lastSetAt = now()->toIso8601String();
+
+        // 2h after the last set (4h after start) it's still open: the clock counts from the last activity
+        $this->travel(2)->hours();
+        $this->getJson("/api/sessions/{$a['id']}")->assertJsonPath('status', 'in_progress');
+
+        // 3h+ of inactivity → finished at the last set
+        $this->travel(90)->minutes();
+        $this->getJson("/api/sessions/{$a['id']}")
+            ->assertJsonPath('status', 'finished')->assertJsonPath('finished_at', $lastSetAt);
+        $this->assertNull($this->getJson('/api/cycles/current')->json('open_session'));
+
+        // Nothing logged at all → annulled
+        $b = $this->postJson('/api/sessions', ['program_day_id' => $dayB])->assertCreated()->json('id');
+        $this->travel(4)->hours();
+        $this->getJson('/api/sessions')->assertJsonPath('data.0.id', $b)->assertJsonPath('data.0.status', 'skipped');
+    }
+
     public function test_users_cannot_see_each_others_data(): void
     {
         $alice = User::factory()->create();

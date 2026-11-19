@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useWakeLock } from '@vueuse/core'
+import { useDebounceFn, useDocumentVisibility, useOnline, useWakeLock } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { Ban, CheckCircle2, ChevronLeft, Flag, MoreHorizontal, Timer, Trash2, X } from '@lucide/vue'
+import { Ban, Bell, Check, CheckCircle2, ChevronLeft, CloudOff, CloudUpload, Flag, Loader2, MoreHorizontal, NotebookPen, Timer, Trash2, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { confirmDialog } from '@/composables/useConfirm'
 import ExerciseCard from '@/components/ExerciseCard.vue'
-import { api, firstError } from '@/lib/api'
+import { api, cachedGet, firstError, isNetworkError, writeCache } from '@/lib/api'
+import { flush, outbox, setKey } from '@/lib/outbox'
 import { fmtDate } from '@/lib/format'
 import { useLocalized } from '@/composables/useLocalized'
 import { useRestTimer } from '@/composables/useRestTimer'
@@ -34,14 +36,37 @@ const active = computed(() => session.value?.status === 'in_progress')
 
 onMounted(async () => {
   try {
-    session.value = await api<Session>(`/sessions/${props.id}`)
+    const { data, offline } = await cachedGet<Session>(`/sessions/${props.id}`)
+    session.value = data
+    if (offline) toast(t('offline.cachedCopy'), { id: 'offline-copy' })
+    note.value = savedNote = session.value.note ?? ''
     if (active.value && wakeLock.isSupported.value) await wakeLock.request('screen').catch(() => {})
   } catch (e) {
     toast.error(firstError(e))
     router.replace('/')
   }
 })
+// Keep the offline copy current (sets saved, skips…), so a reload without network shows the real state.
+watch(session, (s) => { if (s) writeCache(`/sessions/${s.id}`, s) }, { deep: true })
+
+const online = useOnline()
+/** Sets of this workout ticked offline and not yet on the server. */
+const pendingHere = computed(() => outbox.items.filter((i) => i.sessionId === session.value?.id))
+
+// The server auto-closes workouts left idle for 3h; a PWA resumes without reloading, so re-check on return.
+const visibility = useDocumentVisibility()
+watch(visibility, async (v) => {
+  if (v !== 'visible' || !active.value || !session.value) return
+  try {
+    const fresh = await api<Session>(`/sessions/${session.value.id}`)
+    // Only the status: sets/drafts on screen stay untouched.
+    session.value.status = fresh.status
+    session.value.finished_at = fresh.finished_at
+    if (!active.value) timer.stop()
+  } catch { /* offline — keep what we have */ }
+})
 onBeforeUnmount(() => {
+  void saveNote() // flush a note typed right before leaving
   clearInterval(clock)
   void wakeLock.release().catch(() => {})
 })
@@ -53,21 +78,95 @@ const elapsed = computed(() => {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
 })
 const slotSets = (slotId: number) => session.value?.sets.filter((s) => s.day_exercise_id === slotId) ?? []
-const unsaved = computed(() => Object.values(dirty).reduce((a, b) => a + b, 0))
-const planned = computed(() => session.value?.slots.reduce((a, s) => a + s.sets, 0) ?? 0)
-const logged = computed(() => session.value?.sets.filter((s) => !s.is_warmup).length ?? 0)
+const skipped = computed(() => new Set(session.value?.skipped_slots ?? []))
+// Skipped exercises don't count towards progress or unsaved drafts (their sets stay in the log).
+const unsaved = computed(() => Object.entries(dirty).reduce((a, [id, n]) => a + (skipped.value.has(Number(id)) ? 0 : n), 0))
+const planned = computed(() => session.value?.slots.reduce((a, s) => a + (skipped.value.has(s.id) ? 0 : s.sets), 0) ?? 0)
+const logged = computed(() => {
+  if (!session.value) return 0
+  const sid = session.value.id
+  const onServer = session.value.sets.filter((s) => !s.is_warmup && !(s.day_exercise_id && skipped.value.has(s.day_exercise_id)))
+  const serverKeys = new Set(onServer.map((s) => setKey(sid, { day_exercise_id: s.day_exercise_id ?? 0, exercise_id: s.exercise_id, set_no: s.set_no })))
+  const queuedOnly = pendingHere.value.filter((i) => !skipped.value.has(i.body.day_exercise_id) && !serverKeys.has(i.key))
+  return onServer.length + queuedOnly.length
+})
+
+/* Focus: the current exercise is the one tapped last, else the first one not done and not skipped. */
+const doneMap = reactive<Record<number, boolean>>({})
+const focusId = ref<number | null>(null)
+const isOpen = (id: number) => !skipped.value.has(id) && !doneMap[id]
+const currentId = computed(() => {
+  if (!active.value || !session.value) return null
+  if (focusId.value !== null && isOpen(focusId.value)) return focusId.value
+  return session.value.slots.find((s) => isOpen(s.id))?.id ?? null
+})
+
+function onDone(slotId: number, done: boolean) {
+  const justFinishedCurrent = done && doneMap[slotId] === false && currentId.value === slotId
+  doneMap[slotId] = done
+  if (!justFinishedCurrent || !active.value) return
+  if (focusId.value === slotId) focusId.value = null
+  void nextTick(() => {
+    if (currentId.value !== null) document.getElementById(`slot-${currentId.value}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+async function toggleSkip(slotId: number, skip: boolean) {
+  if (!session.value) return
+  const before = session.value.skipped_slots
+  const next = skip ? [...before.filter((id) => id !== slotId), slotId] : before.filter((id) => id !== slotId)
+  session.value.skipped_slots = next // optimistic
+  try {
+    const res = await api<{ skipped_slots: number[] }>(`/sessions/${session.value.id}`, 'PATCH', { skipped_slots: next })
+    session.value.skipped_slots = res.skipped_slots
+  } catch (e) {
+    session.value.skipped_slots = before
+    toast.error(firstError(e))
+  }
+}
 const pct = computed(() => Math.min(100, Math.round((logged.value / Math.max(1, planned.value)) * 100)))
 
-function onSaved(set: SetLog, firstSave: boolean, restMin: number | null) {
+function onSaved(set: SetLog) {
   if (!session.value) return
   const i = session.value.sets.findIndex((s) => s.id === set.id)
   if (i >= 0) session.value.sets[i] = set
   else session.value.sets.push(set)
+}
+
+/** Runs right on the tap (also offline), so the rest timer and its sound start inside the user gesture. */
+function onConfirmed(firstSave: boolean, restMin: number | null) {
   if (firstSave && active.value) timer.start((restMin ?? 1.5) * 60)
 }
 
 function onDeleted(setId: number) {
   if (session.value) session.value.sets = session.value.sets.filter((s) => s.id !== setId)
+}
+
+/* Workout note: autosaved while typing and on blur. */
+const note = ref('')
+let savedNote = ''
+const noteState = ref<'idle' | 'saving' | 'saved'>('idle')
+async function saveNote() {
+  if (!session.value || note.value === savedNote) return
+  const value = note.value
+  noteState.value = 'saving'
+  try {
+    await api(`/sessions/${session.value.id}`, 'PATCH', { note: value.trim() || null })
+    savedNote = value
+    session.value.note = value.trim() || null
+    noteState.value = 'saved'
+  } catch (e) {
+    noteState.value = 'idle'
+    if (!isNetworkError(e)) toast.error(firstError(e)) // offline: kept in the field, retried when back online
+  }
+}
+watch(online, (on) => { if (on) void saveNote() })
+const saveNoteSoon = useDebounceFn(saveNote, 1000)
+
+async function enableNotifications() {
+  const result = await timer.enableNotifications()
+  if (result === 'granted') toast.success(t('workout.notifyEnabled'))
+  else if (result === 'denied') toast.error(t('workout.notifyDenied'))
 }
 
 async function act(kind: 'finish' | 'skip') {
@@ -82,6 +181,9 @@ async function act(kind: 'finish' | 'skip') {
   if (!ok) return
   busy.value = true
   try {
+    // Push sets ticked offline first, so the summary includes them.
+    await flush()
+    await saveNote()
     const summary = await api<SessionSummary>(`/sessions/${session.value.id}/${kind}`, 'POST')
     timer.stop()
     if (kind === 'finish') {
@@ -103,7 +205,12 @@ async function remove() {
   if (!session.value) return
   const ok = await confirmDialog({ title: t('workout.deleteConfirm'), description: t('workout.deleteHint'), confirmText: t('common.delete'), destructive: true })
   if (!ok) return
-  await api(`/sessions/${session.value.id}`, 'DELETE')
+  try {
+    await api(`/sessions/${session.value.id}`, 'DELETE')
+  } catch (e) {
+    toast.error(firstError(e))
+    return
+  }
   timer.stop()
   router.replace('/')
 }
@@ -148,6 +255,13 @@ async function remove() {
           <Progress :model-value="pct" class="h-1.5" />
           <span class="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{{ logged }}/{{ planned }}</span>
         </div>
+        <p v-if="!online || pendingHere.length" class="mt-2 flex items-center gap-1.5 text-xs font-medium text-warning"
+          :title="$t('offline.pendingHint')">
+          <CloudOff v-if="!online" class="size-3.5" /><CloudUpload v-else class="size-3.5 animate-pulse" />
+          <template v-if="!online">{{ $t('offline.noNetwork') }}</template>
+          <template v-if="!online && pendingHere.length"> · </template>
+          <template v-if="pendingHere.length">{{ $t('offline.pending', { n: pendingHere.length }) }}</template>
+        </p>
       </header>
 
       <div v-if="!active" class="rise flex items-center gap-3 rounded-2xl border p-3.5 text-sm"
@@ -157,11 +271,29 @@ async function remove() {
         <span class="font-semibold">{{ $t(`status.${session.status}`) }}</span>
       </div>
 
-      <ExerciseCard v-for="(slot, i) in session.slots" :key="slot.id" class="rise" :style="{ '--i': i }"
+      <ExerciseCard v-for="(slot, i) in session.slots" :id="`slot-${slot.id}`" :key="slot.id"
+        class="rise scroll-mt-[calc(env(safe-area-inset-top)+7.5rem)]" :style="{ '--i': i }"
         :slot="slot" :session-id="session.id" :sets="slotSets(slot.id)" :previous="session.previous"
-        @saved="(set, first) => onSaved(set, first, slot.rest_min)"
+        :skipped="skipped.has(slot.id)" :can-skip="active"
+        :focus-mode="active" :current="currentId === slot.id"
+        @done="(d) => onDone(slot.id, d)" @focus="focusId = slot.id"
+        @skip="(on) => toggleSkip(slot.id, on)"
+        @saved="onSaved"
+        @confirmed="(first) => onConfirmed(first, slot.rest_min)"
         @deleted="onDeleted"
         @dirty="(n) => (dirty[slot.id] = n)" />
+
+      <div class="space-y-1.5 pt-2">
+        <label for="workout-note" class="flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground">
+          <NotebookPen class="size-4" /> {{ $t('workout.note') }}
+          <Loader2 v-if="noteState === 'saving'" class="ml-auto size-3.5 animate-spin" />
+          <span v-else-if="noteState === 'saved'" class="ml-auto inline-flex items-center gap-1 text-xs text-success">
+            <Check class="size-3.5" /> {{ $t('workout.noteSaved') }}
+          </span>
+        </label>
+        <Textarea id="workout-note" v-model="note" maxlength="2000" :placeholder="$t('workout.notePlaceholder')"
+          class="bg-card text-[15px]" @input="noteState = 'idle'; saveNoteSoon()" @blur="saveNote" />
+      </div>
 
       <div v-if="active" class="pt-2">
         <Button size="xl" class="w-full shadow-lg shadow-primary/25" :disabled="busy" @click="act('finish')">
@@ -178,6 +310,10 @@ async function remove() {
                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{{ $t('workout.restTimer') }}</p>
                 <span class="text-[40px] leading-none font-bold tracking-tight tabular-nums" :class="{ urgent: timer.remaining.value <= 5 }">{{ timer.label.value }}</span>
               </div>
+              <Button v-if="timer.notifyPermission.value === 'default'" variant="ghost" size="icon-lg" class="rounded-full text-muted-foreground"
+                :aria-label="$t('workout.notifyEnable')" :title="$t('workout.notifyEnable')" @click="enableNotifications">
+                <Bell />
+              </Button>
               <Button variant="secondary" size="lg" class="px-3.5 tabular-nums" @click="timer.add(-15)">−15</Button>
               <Button variant="secondary" size="lg" class="px-3.5 tabular-nums" @click="timer.add(30)">+30</Button>
               <Button variant="ghost" size="icon-lg" class="rounded-full" :aria-label="$t('workout.skipRest')" @click="timer.stop()"><X /></Button>

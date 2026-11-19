@@ -7,6 +7,7 @@ import { i18n } from './i18n'
 import { setUnauthorizedHandler } from './lib/api'
 import { useAuth } from './stores/auth'
 import { initTheme } from './lib/theme'
+import { startOutbox } from './lib/outbox'
 
 initTheme()
 
@@ -18,3 +19,4 @@ setUnauthorizedHandler(() => {
 })
 
 app.mount('#app')
+startOutbox()

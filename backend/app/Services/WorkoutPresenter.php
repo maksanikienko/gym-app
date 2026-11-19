@@ -161,6 +161,7 @@ class WorkoutPresenter
             'started_at' => $session->started_at->toIso8601String(),
             'finished_at' => $session->finished_at?->toIso8601String(),
             'note' => $session->note,
+            'skipped_slots' => $session->skipped_slots ?? [],
             'day' => $session->day ? [
                 'id' => $session->day->id,
                 'week_no' => $session->day->week->week_no,
@@ -199,6 +200,7 @@ class WorkoutPresenter
                 'title_en' => $s->day->title_en,
                 'title_ru' => $s->day->title_ru,
             ] : null,
+            'note' => $s->note,
             'sets_count' => $work->count(),
             'volume_kg' => round($work->sum(fn ($x) => ($x->weight_kg ?? 0) * ($x->reps ?? 0))),
         ];

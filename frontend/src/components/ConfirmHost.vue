@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { TriangleAlert } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialog, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { confirmState as state, settleConfirm } from '@/composables/useConfirm'
@@ -21,9 +22,10 @@ import { confirmState as state, settleConfirm } from '@/composables/useConfirm'
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel @click="settleConfirm(false)">{{ state.options.cancelText || $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction :variant="state.options.destructive ? 'destructive' : 'default'" @click="settleConfirm(true)">
+        <!-- Plain Button, not AlertDialogAction: its built-in close fires before our @click and would settle as "cancel" -->
+        <Button size="lg" :variant="state.options.destructive ? 'destructive' : 'default'" @click="settleConfirm(true)">
           {{ state.options.confirmText || $t('common.confirm') }}
-        </AlertDialogAction>
+        </Button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
